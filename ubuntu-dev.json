@@ -1,0 +1,28 @@
+{
+	"variables" : {
+		"ovf_filename" : "",
+		"ssh_password" : "",
+		"vm_name" : ""
+	},
+
+	"builders" : [
+		{
+			"type" : "amazon-ebs",
+			"ami_name" : "{{user `ami_name`}}",
+			"ami_description" : "{{user `ami_description`}}",
+			"region" : "{{user `region`}}",
+			"instance_type" : "{{user `instance_type`}}",
+			"source_ami" : "{{user `source_ami` }}",
+			"ssh_username" : "ubuntu",
+			"subnet_id" : "{{user `subnet_id`}}",
+			"vpc_id" : "{{user `vpc_id`}}"
+		}
+	],
+
+	"provisioners" : [
+		{
+		"type" : "shell",
+		"script" : "ubuntu-dev-cloud-init.sh"
+		}
+	]
+}
