@@ -80,6 +80,9 @@ Resources:
           done
         mount /dev/xvdh /home/${TARGET_USER}
         chown -R ${TARGET_USER}.${TARGET_USER} /home/${TARGET_USER}
+        if [[ -x /home/${TARGET_USER}/rc.local ]]; then
+          /home/${TARGET_USER}/rc.local
+        fi
 EOF
 
 #cat ${FILE}
