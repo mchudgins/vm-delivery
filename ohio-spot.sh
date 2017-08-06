@@ -62,84 +62,27 @@ echo "Launching ${IMAGE_NAME} (${IMAGE_ID})"
 FILE=`mktemp`
 cat <<EOF >${FILE}
 {
-    "DryRun": false,
-    "SpotPrice": "0.03",
-    "InstanceCount": 1, 
-    "Type": "one-time", 
-    "LaunchGroup": "",
-    "AvailabilityZoneGroup": "", 
-    "LaunchSpecification": {
-        "ImageId": ${IMAGE_ID}, 
-        "KeyName": "${KEY_NAME}", 
-        "SecurityGroups": [
-            "sg-0a7b8863",
-            "sg-1e857176",
-            "sg-51867239"
-        ], 
-        "UserData": "", 
-        "AddressingType": "", 
-        "InstanceType": "${INSTANCE_TYPE}", 
-        "Placement": {
-            "AvailabilityZone": ${AZ}, 
-            "GroupName": ""
-        }, 
-        "KernelId": "", 
-        "RamdiskId": "", 
-        "BlockDeviceMappings": [
-            {
-                "VirtualName": "", 
-                "DeviceName": "", 
-                "Ebs": {
-                    "SnapshotId": "", 
-                    "VolumeSize": 0, 
-                    "DeleteOnTermination": true, 
-                    "VolumeType": "", 
-                    "Iops": 0, 
-                    "Encrypted": false
-                }, 
-                "NoDevice": ""
-            }
-        ], 
-        "SubnetId": ${SUBNET},
-        "NetworkInterfaces": [
-            {
-                "NetworkInterfaceId": "", 
-                "DeviceIndex": 0, 
-                "SubnetId": "",
-                "Description": "", 
-                "PrivateIpAddress": "", 
-                "Groups": [
-                    ""
-                ], 
-                "DeleteOnTermination": true, 
-                "PrivateIpAddresses": [
-                    {
-                        "PrivateIpAddress": "", 
-                        "Primary": true
-                    }
-                ], 
-                "SecondaryPrivateIpAddressCount": 0, 
-                "AssociatePublicIpAddress": true
-            }
-        ], 
-        "IamInstanceProfile": {
-            "Arn": "", 
-            "Name": ""
-        }, 
-        "EbsOptimized": true, 
-        "Monitoring": {
-            "Enabled": false
-        }, 
-        "SecurityGroupIds": [
-            "sg-0a7b8863",
-            "sg-1e857176",
-            "sg-51867239"
-        ]
+    "ImageId": ${IMAGE_ID},
+    "KeyName": "${KEY_NAME}",
+    "SecurityGroupIds": [
+        "sg-0a7b8863",
+        "sg-1e857176",
+        "sg-51867239"
+    ],
+    "UserData": "",
+    "InstanceType": "${INSTANCE_TYPE}",
+    "SubnetId": ${SUBNET},
+    "IamInstanceProfile": {
+        "Name": "full-ec2-s3-access"
+    },
+    "EbsOptimized": true,
+    "Monitoring": {
+        "Enabled": false
     }
 }
 EOF
 
 cat ${FILE}
 
-aws --region ${REGION} ec2 request-spot-instances --cli-input-json file://${FILE}
+aws --region ${REGION} ec2 request-spot-instances --spot-price "0.03" --instance-count 1 --type "one-time" --launch-specification file://${FILE}
 rm ${FILE}
