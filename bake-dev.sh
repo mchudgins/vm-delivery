@@ -4,7 +4,7 @@
 # a 'ubuntu-dev' development virtual machine image.
 #
 TODAY=`date +%Y%m%d%H%M`
-AMI='ami-e3c3b8f4'
+AMI='ami-d15a75c7'
 AMI_NAME="dev-${TODAY}"
 AMI_DESCRIPTION="Development based on Ubuntu 16.04 LTS"
 INSTANCE_TYPE="t2.medium"

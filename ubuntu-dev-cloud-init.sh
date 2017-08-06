@@ -7,16 +7,21 @@ echo 'Initial Disk Summary'
 df -H
 echo 'Starting Package Installations'
 sudo apt-get update -yq
-sudo apt-get upgrade -yq
+
+# the grub package doesn't respect -y by itself, so we need a bunch of extra options,
+# or the provisioner will get stuck at an interactive prompt asking about Grub configuration
+# see http://askubuntu.com/questions/146921/how-do-i-apt-get-y-dist-upgrade-without-a-grub-config-prompt
+sudo DEBIAN_FRONTEND=noninteractive apt-get o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" upgrade -yq
 sudo apt-get install -yq --no-install-recommends apt-transport-https \
+  awscli \
   bash-completion ca-certificates curl e2fsprogs ethtool gcc htop jq make nano \
   net-tools openjdk-9-jdk-headless python tcpdump unzip
 
 # install AWS CLI/SDK
-curl "https://s3.amazonaws.com/aws-cli/awscli-bundle.zip" -o "/tmp/awscli-bundle.zip"
-cd /tmp
-unzip awscli-bundle.zip
-sudo ./awscli-bundle/install -i /usr/local/aws -b /usr/local/bin/aws
+#curl "https://s3.amazonaws.com/aws-cli/awscli-bundle.zip" -o "/tmp/awscli-bundle.zip"
+#cd /tmp
+#unzip awscli-bundle.zip
+#sudo ./awscli-bundle/install -i /usr/local/aws -b /usr/local/bin/aws
 
 # maven
 curl -sL http://www-us.apache.org/dist/maven/maven-3/3.3.9/binaries/apache-maven-3.3.9-bin.tar.gz \
@@ -38,12 +43,12 @@ sudo sed -i /etc/systemd/system/multi-user.target.wants/docker.service \
   -e 's|^ExecStart=/usr/bin/dockerd|ExecStart=/usr/bin/dockerd --insecure-registry 172.30.0.0/16|g'
 sudo systemctl enable docker
 
-# go 1.7.1
-curl -sL https://storage.googleapis.com/golang/go1.7.1.linux-amd64.tar.gz -o /tmp/go.tar.gz
+# go 1.8.3
+curl -sL https://storage.googleapis.com/golang/go1.8.3.linux-amd64.tar.gz -o /tmp/go.tar.gz
 cd /usr/local
 sudo tar xvfz /tmp/go.tar.gz
-sudo mv go go1.7.1
-sudo ln -s go1.7.1 go
+sudo mv go go1.8.3
+sudo ln -s go1.8.3 go
 
 # sudo access for dev's
 sudo bash -c 'echo "# all members of the dev group can sudo anything" >/etc/sudoers.d/dev'
