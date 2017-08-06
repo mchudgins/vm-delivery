@@ -2,8 +2,20 @@
 
 # function to find the subnet, based on a volume-id and a list of subnet descriptions
 function findSubnetFromVolumeID {
-	echo "hello, world"
+    local az=$2
+	len=`echo "$1" | jq '.Subnets | length'`
+	for i in $(seq 1 ${len}); do
+	    j=$i-1
+        subnetAZ=`echo "$1" | jq ".Subnets[$j].AvailabilityZone"`
+        if [[ ${subnetAZ} == ${az} ]]; then
+            echo `echo "$1" | jq ".Subnets[$j].SubnetId"`
+        fi
+	done
 }
+
+#
+# configuration
+#
 
 REGION=us-east-2
 INSTANCE_TYPE=r4.xlarge
@@ -11,11 +23,12 @@ VOLUME=vol-0adf4fd9ab9eb296d
 KEY_NAME="us-east-2a"
 AZ=`aws --region ${REGION} ec2 describe-volumes --volume-ids ${VOLUME} | jq .Volumes[0].AvailabilityZone`
 SUBNETS=`aws --region ${REGION} ec2 describe-subnets`
-echo SUBNETS=${SUBNETS}
-SUBNET=`findSubnetFromVolumeID`
+SUBNET=`findSubnetFromVolumeID "${SUBNETS}" ${AZ}`
 
-echo SUBNET=${SUBNET}
-exit 0
+if [[ ! /bin/true ]]; then
+    echo SUBNET=${SUBNET}
+    exit 0
+fi
 
 # retrieve the list of ami's owned by this account
 IMAGES=`aws --region ${REGION} ec2 describe-images --owners self`
@@ -46,16 +59,14 @@ IMAGE_ID=`echo ${IMAGES} | jq .Images[${MAX_IMAGE_INDEX}].ImageId`
 echo "Launching ${IMAGE_NAME} (${IMAGE_ID})"
 
 # create the updated json launch config in a temp file
-FILE=mktemp
+FILE=`mktemp`
 cat <<EOF >${FILE}
 {
-    "DryRun": true, 
-    "SpotPrice": "0.03", 
+    "DryRun": false,
+    "SpotPrice": "0.03",
     "InstanceCount": 1, 
     "Type": "one-time", 
-    "ValidFrom": null, 
-    "ValidUntil": null, 
-    "LaunchGroup": "", 
+    "LaunchGroup": "",
     "AvailabilityZoneGroup": "", 
     "LaunchSpecification": {
         "ImageId": ${IMAGE_ID}, 
@@ -84,17 +95,17 @@ cat <<EOF >${FILE}
                     "DeleteOnTermination": true, 
                     "VolumeType": "", 
                     "Iops": 0, 
-                    "Encrypted": true
+                    "Encrypted": false
                 }, 
                 "NoDevice": ""
             }
         ], 
-        "SubnetId": "", 
+        "SubnetId": ${SUBNET},
         "NetworkInterfaces": [
             {
                 "NetworkInterfaceId": "", 
                 "DeviceIndex": 0, 
-                "SubnetId": "", 
+                "SubnetId": "",
                 "Description": "", 
                 "PrivateIpAddress": "", 
                 "Groups": [
@@ -120,10 +131,15 @@ cat <<EOF >${FILE}
             "Enabled": false
         }, 
         "SecurityGroupIds": [
-            ""
+            "sg-0a7b8863",
+            "sg-1e857176",
+            "sg-51867239"
         ]
     }
 }
 EOF
 
-#cat ${FILE}
+cat ${FILE}
+
+aws --region ${REGION} ec2 request-spot-instances --cli-input-json file://${FILE}
+rm ${FILE}
