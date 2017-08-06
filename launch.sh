@@ -40,7 +40,7 @@ Resources:
       AvailabilityZone: us-east-1e
       IamInstanceProfile: full-ec2-s3-access
       ImageId: "ami-ce1157d9"
-      InstanceType: t2.medium
+      InstanceType: r4.large
       KeyName: "apache-test"
       NetworkInterfaces:
         -
