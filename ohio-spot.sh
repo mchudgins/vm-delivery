@@ -58,6 +58,36 @@ IMAGE_NAME=`echo ${IMAGES} | jq .Images[${MAX_IMAGE_INDEX}].Name`
 IMAGE_ID=`echo ${IMAGES} | jq .Images[${MAX_IMAGE_INDEX}].ImageId`
 echo "Launching ${IMAGE_NAME} (${IMAGE_ID})"
 
+# create the cloud-init user data
+USERDATA=$(cat <<-"_EOF_" | sed -e "s/VOLUME=xxx/VOLUME=${VOLUME}/" -e "s/REGION=xxx/REGION=${REGION}/" | base64 -w 0
+#! /bin/bash
+TARGET_USER=mchudgins
+REGION=xxx
+VOLUME=xxx
+id >/tmp/${TARGET_USER}.uid
+hostname mch-dev.dstcorp.io
+adduser --gecos 'Mike Hudgins,,,' --disabled-password ${TARGET_USER}
+aws --region ${REGION} ec2 attach-volume --volume-id ${VOLUME} \
+  --instance-id `curl -s http://169.254.169.254/latest/meta-data/instance-id` \
+  --device /dev/xvdh
+addgroup dev
+adduser ${TARGET_USER} dev
+ls /dev/xvdh
+while [[ $? != 0 ]]
+  do
+  sleep 5
+  ls /dev/xvdh
+  done
+mount /dev/xvdh /home/${TARGET_USER}
+chown -R ${TARGET_USER}.${TARGET_USER} /home/${TARGET_USER}
+if [[ -x /home/${TARGET_USER}/rc.local ]]; then
+  /home/${TARGET_USER}/rc.local
+fi
+_EOF_
+)
+
+echo ${USERDATA} | base64 -d
+
 # create the updated json launch config in a temp file
 FILE=`mktemp`
 cat <<EOF >${FILE}
@@ -69,7 +99,7 @@ cat <<EOF >${FILE}
         "sg-1e857176",
         "sg-51867239"
     ],
-    "UserData": "",
+    "UserData": "${USERDATA}",
     "InstanceType": "${INSTANCE_TYPE}",
     "SubnetId": ${SUBNET},
     "IamInstanceProfile": {
