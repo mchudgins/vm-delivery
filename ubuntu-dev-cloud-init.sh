@@ -15,7 +15,7 @@ sudo DEBIAN_FRONTEND=noninteractive apt-get o Dpkg::Options::="--force-confdef" 
 sudo apt-get install -yq --no-install-recommends apt-transport-https \
   awscli \
   bash-completion ca-certificates curl e2fsprogs ethtool gcc htop jq make nano \
-  net-tools openjdk-9-jdk-headless python tcpdump unzip
+  net-tools openjdk-8-jdk-headless python tcpdump unzip
 
 # install AWS CLI/SDK
 #curl "https://s3.amazonaws.com/aws-cli/awscli-bundle.zip" -o "/tmp/awscli-bundle.zip"
@@ -24,7 +24,7 @@ sudo apt-get install -yq --no-install-recommends apt-transport-https \
 #sudo ./awscli-bundle/install -i /usr/local/aws -b /usr/local/bin/aws
 
 # maven
-curl -sL http://www-us.apache.org/dist/maven/maven-3/3.3.9/binaries/apache-maven-3.3.9-bin.tar.gz \
+curl -sL http://www-us.apache.org/dist/maven/maven-3/3.5.0/binaries/apache-maven-3.5.0-bin.tar.gz \
   -o /tmp/maven.tar.gz
 
 cd /opt && sudo tar xvfz /tmp/maven.tar.gz && sudo ln -s apache-maven-* mvn
