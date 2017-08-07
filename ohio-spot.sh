@@ -1,5 +1,12 @@
 #! /bin/bash
 
+# check if a spot price was provided
+if [[ -z "${SPOT_PRICE}" ]]; then
+    BID_PRICE=0.0275
+else
+    BID_PRICE=${SPOT_PRICE}
+fi
+
 # function to find the subnet, based on a volume-id and a list of subnet descriptions
 function findSubnetFromVolumeID {
     local az=$2
@@ -114,5 +121,33 @@ EOF
 
 cat ${FILE}
 
-aws --region ${REGION} ec2 request-spot-instances --spot-price "0.03" --instance-count 1 --type "one-time" --launch-specification file://${FILE}
+cmd="aws --region ${REGION} ec2 request-spot-instances --spot-price ${BID_PRICE} --instance-count 1 --type one-time --launch-specification file://${FILE}"
+echo cmd = ${cmd}
+rc=`${cmd}`
+echo $rc >/tmp/ohio.json
+
 rm ${FILE}
+
+requestID=`echo ${rc} | jq .SpotInstanceRequests[0].SpotInstanceRequestId | sed -e 's/"//g'`
+if [[ -z "${requestID}" ]]; then
+    echo "Unable to find Spot Request ID"
+    exit 1
+fi
+
+# wait up to 5 minutes for an instance & either tag it or exit with error
+sleep 15
+instanceID=`aws --region ${REGION} ec2 describe-spot-instance-requests --spot-instance-request ${requestID} \
+    | jq .SpotInstanceRequests[0].InstanceId | sed -e 's/"//g'`
+echo instanceID ${instanceID}
+
+while [[ "${instanceID}" == "null" ]]
+  do
+  sleep 5
+  instanceID=`aws --region ${REGION} ec2 describe-spot-instance-requests --spot-instance-request ${requestID} \
+    | jq .SpotInstanceRequests[0].InstanceId | sed -e 's/"//g'`
+  done
+aws --region ${REGION} ec2 create-tags --resources ${instanceID} --tags Key=Name,Value=mch-dev
+
+#display the instance's IP ADDR
+ipaddr=`aws --region us-east-2 ec2 describe-instances --instance-ids ${instanceID} | jq .Reservations[0].Instances[0].PublicIpAddress`
+echo Instance availabe at ${ipaddr}
