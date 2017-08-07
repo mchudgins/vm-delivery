@@ -29,7 +29,7 @@ IMAGE_ID=`echo ${IMAGES} | jq .Images[${MAX_IMAGE_INDEX}].ImageId`
 echo "Launching ${IMAGE_NAME} (${IMAGE_ID})"
 
 # create the updated yaml cloudformation template in a temp file
-FILE=mktemp
+FILE=`mktemp`
 cat <<"EOF" | sed -e "s/ImageId: .*/ImageId: ${IMAGE_ID}/g" >${FILE}
 AWSTemplateFormatVersion: "2010-09-09"
 Description: Launches a dev instance in ec2
