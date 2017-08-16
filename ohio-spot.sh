@@ -126,13 +126,13 @@ echo cmd = ${cmd}
 rc=`${cmd}`
 echo $rc >/tmp/ohio.json
 
-rm ${FILE}
-
 requestID=`echo ${rc} | jq .SpotInstanceRequests[0].SpotInstanceRequestId | sed -e 's/"//g'`
 if [[ -z "${requestID}" ]]; then
     echo "Unable to find Spot Request ID"
     exit 1
 fi
+
+rm ${FILE}
 
 # wait up to 5 minutes for an instance & either tag it or exit with error
 sleep 15
