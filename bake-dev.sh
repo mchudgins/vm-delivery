@@ -9,7 +9,8 @@ AMI_NAME="dev-${TODAY}"
 AMI_DESCRIPTION="Development based on Ubuntu 16.04 LTS"
 INSTANCE_TYPE="t2.medium"
 REGION="us-east-1"
-SUBNET_ID="subnet-6e8b8005"
+SUBNET_ID="subnet-08849b7f"
+SECURITY_GROUP_ID="sg-5ef8153a"
 VPC_ID="vpc-94f4ffff"
 VM_NAME=ubuntu-dev-${TODAY}
 
@@ -21,6 +22,7 @@ packer build \
 	-var "region=${REGION}" \
 	-var "subnet_id=${SUBNET_ID}" \
 	-var "vpc_id=${VPC_ID}" \
+	-var "security_group_id=${SECURITY_GROUP_ID}" \
 	ubuntu-dev.json | tee ubuntu-dev-${TODAY}.log
 
 #VBoxManage modifyvm Fedora-Cloud-Base-24-1.2 --nic2 intnet
