@@ -15,6 +15,8 @@ VPC_ID="vpc-94f4ffff"
 VM_NAME=ubuntu-dev-${TODAY}
 
 packer build \
+    -var "spot_price=auto" \
+    -var "spot_price_auto_product=Linux/UNIX" \
 	-var "ami_name=${AMI_NAME}" \
 	-var "ami_description=${AMI_DESCRIPTION}" \
 	-var "instance_type=${INSTANCE_TYPE}" \
