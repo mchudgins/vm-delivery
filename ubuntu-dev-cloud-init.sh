@@ -15,6 +15,9 @@ echo 'Starting Package Installations'
 #   update package info
 sudo apt-get update -yq
 
+# stop unattended upgrades -- that's why we have baked images!
+sudo apt-get remove unattended-upgrades
+
 # the grub package doesn't respect -y by itself, so we need a bunch of extra options,
 # or the provisioner will get stuck at an interactive prompt asking about Grub configuration
 # see http://askubuntu.com/questions/146921/how-do-i-apt-get-y-dist-upgrade-without-a-grub-config-prompt
