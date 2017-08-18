@@ -110,7 +110,7 @@ cat <<EOF >${FILE}
     "InstanceType": "${INSTANCE_TYPE}",
     "SubnetId": ${SUBNET},
     "IamInstanceProfile": {
-        "Name": "full-ec2-s3-access"
+        "Name": "ec2PackerInstanceRole"
     },
     "EbsOptimized": true,
     "Monitoring": {
