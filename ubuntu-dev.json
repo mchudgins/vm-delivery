@@ -10,6 +10,7 @@
 			"type" : "amazon-ebs",
 			"ami_name" : "{{user `ami_name`}}",
 			"ami_description" : "{{user `ami_description`}}",
+			"iam_instance_profile" : "{{user `iam_instance_profile`}}",
 			"region" : "{{user `region`}}",
 			"instance_type" : "{{user `instance_type`}}",
 			"source_ami" : "{{user `source_ami` }}",

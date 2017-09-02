@@ -24,8 +24,10 @@ sudo apt-get remove unattended-upgrades
 sudo DEBIAN_FRONTEND=noninteractive apt-get -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" upgrade -yq
 sudo apt-get install -yq --no-install-recommends apt-transport-https \
   awscli \
-  bash-completion ca-certificates curl e2fsprogs ethtool gcc htop jq make nano \
-  net-tools openjdk-8-jdk-headless python silversearcher-ag tcpdump unzip
+  bash-completion ca-certificates curl e2fsprogs ethtool gcc htop jq 
+  linux-image-extra-$(uname -r) linux-image-extra-virtual make nano \
+  net-tools openjdk-8-jdk-headless python software-properties-common \
+  silversearcher-ag tcpdump unzip
 
 # install AWS CLI/SDK
 #curl "https://s3.amazonaws.com/aws-cli/awscli-bundle.zip" -o "/tmp/awscli-bundle.zip"
@@ -40,13 +42,22 @@ curl -sL http://www-us.apache.org/dist/maven/maven-3/3.5.0/binaries/apache-maven
 cd /opt && sudo tar xvfz /tmp/maven.tar.gz && sudo ln -s apache-maven-* mvn
 
 # docker
-sudo apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D
-sudo sh -c "echo 'deb https://apt.dockerproject.org/repo ubuntu-xenial main' > /etc/apt/sources.list.d/docker.list"
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+sudo add-apt-repository \
+   "deb [arch=amd64] https://download.docker.com/linux/ubuntu \
+   $(lsb_release -cs) \
+   stable"
 sudo apt-get update
-sudo apt-get purge lxc-docker
-sudo apt-cache policy docker-engine
-sudo apt-get install -yq --no-install-recommends linux-image-extra-$(uname -r) linux-image-extra-virtual
-sudo apt-get install -yq --no-install-recommends docker-engine
+sudo apt-get install -yq --no-install-recommends docker-ce
+
+#sudo apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D
+#sudo sh -c "echo 'deb https://apt.dockerproject.org/repo ubuntu-xenial main' > /etc/apt/sources.list.d/docker.list"
+#sudo apt-get update
+#sudo apt-get purge lxc-docker
+#sudo apt-cache policy docker-engine
+#sudo apt-get install -yq --no-install-recommends linux-image-extra-$(uname -r) linux-image-extra-virtual
+#sudo apt-get install -yq --no-install-recommends docker-engine
+
 sudo groupadd docker
 sudo sed -i /etc/systemd/system/multi-user.target.wants/docker.service \
   --follow-symlinks \
@@ -65,6 +76,11 @@ sudo bash -c 'echo "# all members of the dev group can sudo anything" >/etc/sudo
 sudo bash -c 'echo "%dev ALL=(ALL) NOPASSWD:ALL" >>/etc/sudoers.d/dev'
 
 sudo addgroup dev
+
+# DST Root CA
+aws s3 cp s3://dstcorp/dst-root.crt /tmp
+sudo cp /tmp/dst-root.crt /usr/local/share/ca-certificates
+sudo update-ca-certificates
 
 # clean up
 sudo apt-get clean
