@@ -71,7 +71,6 @@ USERDATA=$(cat <<-"_EOF_" | sed -e "s/VOLUME=xxx/VOLUME=${VOLUME}/" -e "s/REGION
 TARGET_USER=mchudgins
 REGION=xxx
 VOLUME=xxx
-id >/tmp/${TARGET_USER}.uid
 hostname mch-dev.dstcorp.io
 adduser --gecos 'Mike Hudgins,,,' --disabled-password ${TARGET_USER}
 aws --region ${REGION} ec2 attach-volume --volume-id ${VOLUME} \
