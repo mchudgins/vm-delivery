@@ -15,16 +15,13 @@ echo 'Starting Package Installations'
 #   update package info
 sudo apt-get update -yq
 
-# stop unattended upgrades -- that's why we have baked images!
-sudo apt-get remove unattended-upgrades
-
 # the grub package doesn't respect -y by itself, so we need a bunch of extra options,
 # or the provisioner will get stuck at an interactive prompt asking about Grub configuration
 # see http://askubuntu.com/questions/146921/how-do-i-apt-get-y-dist-upgrade-without-a-grub-config-prompt
 sudo DEBIAN_FRONTEND=noninteractive apt-get -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" upgrade -yq
-sudo apt-get install -yq --no-install-recommends apt-transport-https \
-  awscli \
-  bash-completion ca-certificates curl e2fsprogs ethtool gcc htop jq 
+sudo apt-get install -yq --no-install-recommends \
+  apt-transport-https awscli \
+  bash-completion ca-certificates curl e2fsprogs ethtool gcc htop jq \
   linux-image-extra-$(uname -r) linux-image-extra-virtual make nano \
   net-tools openjdk-8-jdk-headless python software-properties-common \
   silversearcher-ag tcpdump unzip
@@ -50,6 +47,10 @@ sudo add-apt-repository \
 sudo apt-get update
 sudo apt-get install -yq --no-install-recommends docker-ce
 
+# stop unattended upgrades -- that's why we have baked images!
+sudo apt-get remove -yq unattended-upgrades
+sudo apt autoremove -yq
+
 #sudo apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D
 #sudo sh -c "echo 'deb https://apt.dockerproject.org/repo ubuntu-xenial main' > /etc/apt/sources.list.d/docker.list"
 #sudo apt-get update
@@ -69,7 +70,12 @@ curl -sL https://storage.googleapis.com/golang/go1.8.3.linux-amd64.tar.gz -o /tm
 cd /usr/local
 sudo tar xvfz /tmp/go.tar.gz
 sudo mv go go1.8.3
-sudo ln -s go1.8.3 go
+# go 1.9
+curl -sL https://storage.googleapis.com/golang/go1.9.linux-amd64.tar.gz -o /tmp/go.tar.gz
+cd /usr/local
+sudo tar xvfz /tmp/go.tar.gz
+sudo mv go go1.9
+sudo ln -s go1.9 go
 
 # sudo access for dev's
 sudo bash -c 'echo "# all members of the dev group can sudo anything" >/etc/sudoers.d/dev'
