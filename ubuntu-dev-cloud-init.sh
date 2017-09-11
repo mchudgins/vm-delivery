@@ -21,7 +21,7 @@ sudo apt-get update -yq
 sudo DEBIAN_FRONTEND=noninteractive apt-get -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" upgrade -yq
 sudo apt-get install -yq --no-install-recommends \
   apt-transport-https awscli \
-  bash-completion ca-certificates curl e2fsprogs ethtool gcc htop jq \
+  bash-completion build-essential ca-certificates curl e2fsprogs ethtool gcc htop jq \
   linux-image-extra-virtual make nano \
   net-tools openjdk-8-jdk-headless python software-properties-common \
   silversearcher-ag tcpdump unzip
