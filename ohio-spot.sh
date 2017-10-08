@@ -111,6 +111,13 @@ cat <<EOF >${FILE}
     "IamInstanceProfile": {
         "Name": "ec2PackerInstanceRole"
     },
+    "BlockDeviceMappings" : [ {
+        "DeviceName" : "/dev/sda1",
+        "Ebs" : {
+             "VolumeSize" : 100
+        }
+        }
+    ],
     "EbsOptimized": true,
     "Monitoring": {
         "Enabled": false
