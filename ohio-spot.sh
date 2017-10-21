@@ -157,3 +157,31 @@ aws --region ${REGION} ec2 create-tags --resources ${instanceID} --tags Key=Name
 #display the instance's IP ADDR
 ipaddr=`aws --region us-east-2 ec2 describe-instances --instance-ids ${instanceID} | jq .Reservations[0].Instances[0].PublicIpAddress`
 echo Instance available at ${ipaddr}
+
+# update the DNS entry for this new instance of mch-dev.dstcorp.io
+FILE=`mktemp`
+cat <<EOF >${FILE}
+{
+    "Comment": "Update record to reflect public IP address of instance ${instanceID}",
+    "Changes": [
+        {
+            "Action": "UPSERT",
+            "ResourceRecordSet": {
+                "Name": "mch-dev.dstcorp.io.",
+                "Type": "A",
+                "TTL": 300,
+                "ResourceRecords": [
+                    {
+                        "Value": ${ipaddr}
+                    }
+                ]
+            }
+        }
+    ]
+}
+EOF
+
+ZONEID=`aws route53 list-hosted-zones | jq '.[][] | select(.Name=="dstcorp.io.") | .Id' | sed  -s 's/"//g' | sed -s 's|/hostedzone/||g'`
+aws route53 change-resource-record-sets --hosted-zone-id ${ZONEID} --change-batch file://${FILE}
+
+rm ${FILE}
