@@ -31,7 +31,7 @@ packer build \
 	-var "subnet_id=${SUBNET_ID}" \
 	-var "vpc_id=${VPC_ID}" \
 	-var "security_group_id=${SECURITY_GROUP_ID}" \
-	ubuntu.json | tee vault-seed-${TODAY}.log
+	ubuntu.json | tee ${IMAGE_STREAM}-${TODAY}.log
 
 #
 # tag the newly created AMI with the parent's AMI ID
