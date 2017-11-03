@@ -15,6 +15,7 @@ REGION=us-east-1
 INSTANCE_TYPE=m4.large
 KEY_NAME="kp201707"
 SUBNET="subnet-08849b7f"
+IMAGE_STREAM=etcd
 
 if [[ ! /bin/true ]]; then
     echo SUBNET=${SUBNET}
@@ -52,10 +53,15 @@ echo "Launching ${IMAGE_NAME} (${IMAGE_ID})"
 # create the cloud-init user data
 USERDATA=$(cat <<-"_EOF_" | sed -e "s/REGION=xxx/REGION=${REGION}/" | base64 -w 0
 #! /bin/bash
+hostname `hostname -s`.ec2.internal
+
 REGION=xxx
 id >/tmp/id.uid
 date > /tmp/cloud-final
-#hostname vault-seed-${REGION}.dstcorp.io
+echo NODE_NAME=etcd0 > /tmp/etcd-config
+echo CLUSTER_NAME=vpc0 >> /tmp/etcd-config
+
+systemctl start etcd
 _EOF_
 )
 
@@ -116,7 +122,7 @@ while [[ "${instanceID}" == "null" ]]
   instanceID=`aws --region ${REGION} ec2 describe-spot-instance-requests --spot-instance-request ${requestID} \
     | jq .SpotInstanceRequests[0].InstanceId | sed -e 's/"//g'`
   done
-aws --region ${REGION} ec2 create-tags --resources ${instanceID} --tags Key=Name,Value=vault-seed
+aws --region ${REGION} ec2 create-tags --resources ${instanceID} --tags Key=Name,Value=${IMAGE_STREAM}
 
 #display the instance's IP ADDR
 ipaddr=`aws --region ${REGION} ec2 describe-instances --instance-ids ${instanceID} | jq .Reservations[0].Instances[0].PublicIpAddress`

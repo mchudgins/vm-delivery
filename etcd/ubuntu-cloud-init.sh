@@ -48,6 +48,7 @@ aws s3 cp ${VAULT_ARTIFACT} /tmp/vault.zip \
     && chmod +x /tmp/etcd \
     && sudo mv /tmp/etcd /usr/local/bin \
     && sudo mkdir -p /usr/local/etc/etcd \
+    && sudo chown etcd /usr/local/etc/etcd \
     && sudo mkdir -p /var/lib/etcd \
     && sudo chown etcd /var/lib/etcd \
     && sudo chown root.root /usr/local/bin/*
@@ -58,10 +59,10 @@ cat <<"EOF" >/tmp/etcd.service
 Description=etcd distributed consensus service
 
 [Service]
-EnvironmentFile=-/etc/default/etcd
+#EnvironmentFile=-/etc/default/etcd
 User=etcd
 Group=nogroup
-ExecStart=/usr/local/bin/etcd $OPTS
+ExecStart=/usr/local/bin/etcd-start
 ExecReload=/bin/kill -HUP $MAINPID
 KillMode=process
 Restart=on-failure
@@ -71,13 +72,25 @@ EOF
 sudo mv /tmp/etcd.service /etc/systemd/system
 sudo systemctl daemon-reload
 
-# set up the environment file for etcd
-cat <<"EOF" >/tmp/etcd.env
-CA=/usr/local/share/ca-certificates/root-ca.crt
+# set up the startup script for etcd
+cat <<"EOF" >/tmp/etcd-start
+#! /bin/bash
+CA=/usr/local/share/ca-certificates/dst-root.crt
 CERT=/usr/local/etc/etcd/cert.pem
 KEY=/usr/local/etc/etcd/key.pem
 INTERNAL_IP=`curl -s http://169.254.169.254/latest/meta-data/local-ipv4`
-ETCD_NAME=etcd
+ETCD_NAME=controller-0
+REGION=`curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone | sed 's/[abcdefghijk]$//'`
+
+if [[ ! -f ${CERT} ]]; then
+    aws --region ${REGION} s3 cp s3://dstcorp/etcd/cert.pem ${CERT}
+fi
+
+if [[ ! -f ${KEY} ]]; then
+    aws --region ${REGION} s3 cp s3://dstcorp/etcd/key.pem  ${KEY}
+    chmod og-rw /usr/local/etc/etcd/key.pem
+    chmod u-w /usr/local/etc/etcd/key.pem
+fi
 
 OPTS="--name ${ETCD_NAME} \
   --cert-file=${CERT} \
@@ -96,11 +109,11 @@ OPTS="--name ${ETCD_NAME} \
   --initial-cluster controller-0=https://10.10.128.10:2380,controller-1=https://10.10.128.11:2380,controller-2=https://10.10.128.12:2380 \
   --initial-cluster-state new \
   --data-dir=/var/lib/etcd"
-EOF
-sudo cp /tmp/etcd.env /etc/default/etcd
 
-# use rc.local to launch vault
-sudo systemctl enable rc-local.service
+exec /usr/local/bin/etcd ${OPTS}
+EOF
+chmod +x /tmp/etcd-start
+sudo cp /tmp/etcd-start /usr/local/bin/etcd-start
 
 # create the rc.local start script
 cat <<"EOF" >/tmp/rc.local
@@ -123,11 +136,16 @@ EOF_CFG
     chown -R etcd /usr/local/etc/etcd
 fi
 
-#sudo -u vault /usr/local/bin/vault server -config=${VAULT_CONFIG} &
+if [[ -f /tmp/etcd-config ]]; then
+    cp /tmp/etcd-config /tmp/found.it
+else
+    date > /tmp/not.found
+fi
+
 systemctl start etcd
 EOF
-sudo cp /tmp/rc.local /etc/rc.local
-sudo chmod +x /etc/rc.local
+#sudo cp /tmp/rc.local /etc/rc.local
+#sudo chmod +x /etc/rc.local
 
 # clean up
 sudo apt-get clean
