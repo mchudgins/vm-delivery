@@ -65,16 +65,10 @@ else
     BID_PRICE=${SPOT_PRICE}
 fi
 
-if [[ ! /bin/true ]]; then
-    echo SUBNET=${SUBNET}
-    exit 0
-fi
-
 # retrieve the list of ami's owned by this account
 IMAGES=`aws --region ${REGION} ec2 describe-images --owners self`
-#IMAGES=`cat /tmp/images.json`
 
-# now find the latest image matching vault-seed-<date/time>
+# now find the latest image matching etcd-<date/time>
 ORIGIN_DATE="0000-00-00T00:00:00.000Z"
 MAX_DATE=${ORIGIN_DATE}
 MAX_IMAGE_INDEX=-1
@@ -85,7 +79,7 @@ for i in `seq 1 ${image_count}`; do
   name=`echo ${IMAGES} | jq .Images[$var].Name`
   IFS='-' read -ra NAME <<< "${name//\"/}"
   if [[ ${#NAME[@]} -eq 2 ]]; then
-    if [[ ${NAME[0]} == "etcd" ]]; then
+    if [[ ${NAME[0]} == "${IMAGE_STREAM}" ]]; then
       IMAGE_DATE=`echo ${IMAGES} | jq .Images[$var].CreationDate`
       if [[ "${MAX_DATE}" < "${IMAGE_DATE}" ]]; then
         MAX_DATE=${IMAGE_DATE}
