@@ -58,7 +58,7 @@ hostname `hostname -s`.ec2.internal
 REGION=xxx
 id >/tmp/id.uid
 date > /tmp/cloud-final
-echo NODE_NAME=etcd0 > /tmp/etcd-config
+echo NODE_NAME=controller-0 > /tmp/etcd-config
 echo CLUSTER_NAME=vpc0 >> /tmp/etcd-config
 
 systemctl start etcd
