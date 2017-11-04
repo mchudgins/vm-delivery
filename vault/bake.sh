@@ -62,5 +62,5 @@ for i in `seq 1 ${image_count}`; do
   fi
 done
 
-echo "Unable to tag newly created AMI"
+echo "Unable to tag newly created AMI ${AMI_NAME}"
 exit 1
