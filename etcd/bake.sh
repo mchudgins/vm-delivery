@@ -54,8 +54,8 @@ for i in `seq 1 ${image_count}`; do
     aws --region ${REGION} ec2 create-tags --resources ${newAmi} --tags \
         Key=ParentAMI,Value=${AMI} \
         Key=ImageStream,Value=${IMAGE_STREAM} \
-        Key="git commit",Value="$(gitCommitHash)" \
-        Key="git origin",Value="$(gitOriginURL)"
+        Key="git.commit",Value="$(gitCommitHash)" \
+        Key="git.origin",Value="$(gitOriginURL)"
 
     aws --region ${REGION} ec2 create-tags --resources ${snapShotID} --tags Key=Name,Value=${AMI_NAME} \
         Key=ImageStream,Value=${IMAGE_STREAM}
