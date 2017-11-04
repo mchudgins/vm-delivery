@@ -3,9 +3,10 @@
 # This script launches the packer builder to create
 # a 'ubuntu-dev' development virtual machine image.
 #
+IMAGE_STREAM='dev'
 TODAY=`date +%Y%m%d%H%M`
 AMI='ami-cd0f5cb6'
-AMI_NAME="dev-${TODAY}"
+AMI_NAME="${IMAGE_STREAM}-${TODAY}"
 AMI_DESCRIPTION="Development based on Ubuntu 16.04 LTS"
 IAM_INSTANCE_PROFILE="ec2PackerInstanceRole"
 INSTANCE_TYPE="t2.medium"
@@ -29,5 +30,29 @@ packer build \
 	-var "security_group_id=${SECURITY_GROUP_ID}" \
 	ubuntu-dev.json | tee ubuntu-dev-${TODAY}.log
 
-#VBoxManage modifyvm Fedora-Cloud-Base-24-1.2 --nic2 intnet
-#VBoxManage modifyvm Fedora-Cloud-Base-24-1.2 --intnet2 cloud-net-0
+#
+# tag the newly created AMI with the parent's AMI ID
+# (we can use this later for inventory management)
+#
+
+# retrieve the list of ami's owned by this account
+IMAGES=`aws --region ${REGION} ec2 describe-images --owners self`
+
+image_count=`echo ${IMAGES} | jq '.[] | length'`
+for i in `seq 1 ${image_count}`; do
+  var=`expr $i - 1`
+  name=`echo ${IMAGES} | jq .Images[$var].Name | sed -e s/\"//g`
+  if [[ ${name} == "${AMI_NAME}" ]]; then
+    newAmi=`echo ${IMAGES} | jq .Images[$var].ImageId | sed -e s/\"//g`
+    snapShotID=`echo ${IMAGES} | jq .Images[$var].BlockDeviceMappings[0].Ebs.SnapshotId | sed -e s/\"//g`
+    echo Tagging AMI ${newAmi} with tag ParentAMI=${AMI}
+    aws --region ${REGION} ec2 create-tags --resources ${newAmi} --tags Key=ParentAMI,Value=${AMI} \
+        Key=ImageStream,Value=${IMAGE_STREAM}
+    aws --region ${REGION} ec2 create-tags --resources ${snapShotID} --tags Key=Name,Value=${AMI_NAME} \
+        Key=ImageStream,Value=${IMAGE_STREAM}
+    exit 0
+  fi
+done
+
+echo "Unable to tag newly created AMI"
+exit 1

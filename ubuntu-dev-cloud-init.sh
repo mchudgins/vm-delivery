@@ -33,7 +33,7 @@ sudo apt-get install -yq --no-install-recommends \
 #sudo ./awscli-bundle/install -i /usr/local/aws -b /usr/local/bin/aws
 
 # maven
-curl -sL http://www-us.apache.org/dist/maven/maven-3/3.5.0/binaries/apache-maven-3.5.0-bin.tar.gz \
+curl -sL http://www-us.apache.org/dist/maven/maven-3/3.5.2/binaries/apache-maven-3.5.2-bin.tar.gz \
   -o /tmp/maven.tar.gz
 
 cd /opt && sudo tar xvfz /tmp/maven.tar.gz && sudo ln -s apache-maven-* mvn
@@ -70,12 +70,12 @@ curl -sL https://storage.googleapis.com/golang/go1.8.3.linux-amd64.tar.gz -o /tm
 cd /usr/local
 sudo tar xvfz /tmp/go.tar.gz
 sudo mv go go1.8.3
-# go 1.9
-curl -sL https://storage.googleapis.com/golang/go1.9.linux-amd64.tar.gz -o /tmp/go.tar.gz
+# go 1.9.2
+curl -sL https://redirector.gvt1.com/edgedl/go/go1.9.2.linux-amd64.tar.gz -o /tmp/go.tar.gz
 cd /usr/local
 sudo tar xvfz /tmp/go.tar.gz
-sudo mv go go1.9
-sudo ln -s go1.9 go
+sudo mv go go1.9.2
+sudo ln -s go1.9.2 go
 
 # sudo access for dev's
 sudo bash -c 'echo "# all members of the dev group can sudo anything" >/etc/sudoers.d/dev'
@@ -89,6 +89,7 @@ sudo cp /tmp/dst-root.crt /usr/local/share/ca-certificates
 sudo update-ca-certificates
 
 # clean up
+sudo apt-get autoremove
 sudo apt-get clean
 sudo rm -r /var/lib/apt/lists/*
 rm -rf /tmp/*
