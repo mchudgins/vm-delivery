@@ -32,3 +32,35 @@ function gitOriginURL {
 
     echo ${origin}
 }
+
+# tag an AMI (and the underlying EBS snapshot) with important data
+function tagAMI {
+AMI_NAME=$1
+IMAGE_STREAM=$2
+PARENT_AMI=$3
+
+# retrieve the list of ami's owned by this account
+IMAGES=`aws --region ${REGION} ec2 describe-images --owners self`
+
+image_count=`echo ${IMAGES} | jq '.[] | length'`
+for i in `seq 1 ${image_count}`; do
+  var=`expr $i - 1`
+  name=`echo ${IMAGES} | jq .Images[$var].Name | sed -e s/\"//g`
+  if [[ ${name} == "${AMI_NAME}" ]]; then
+    newAmi=`echo ${IMAGES} | jq .Images[$var].ImageId | sed -e s/\"//g`
+    snapShotID=`echo ${IMAGES} | jq .Images[$var].BlockDeviceMappings[0].Ebs.SnapshotId | sed -e s/\"//g`
+    echo Tagging AMI ${newAmi} with tag ParentAMI=${PARENT_AMI}
+    aws --region ${REGION} ec2 create-tags --resources ${newAmi} --tags \
+        Key=ParentAMI,Value=${PARENT_AMI} \
+        Key=ImageStream,Value=${IMAGE_STREAM} \
+        Key="git.commit",Value="$(gitCommitHash)" \
+        Key="git.origin",Value="$(gitOriginURL)"
+    aws --region ${REGION} ec2 create-tags --resources ${snapShotID} --tags Key=Name,Value=${AMI_NAME} \
+        Key=ImageStream,Value=${IMAGE_STREAM}
+    return 0
+  fi
+done
+
+echo "Unable to tag newly created AMI ${AMI_NAME}"
+return 1
+}
