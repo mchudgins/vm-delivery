@@ -19,6 +19,8 @@ VPC_ID="vpc-94f4ffff"
 # bake the new image
 #
 
+source ../helpers/bash_functions
+
 packer build \
     -var "spot_price=auto" \
     -var "spot_price_auto_product=Linux/UNIX" \
@@ -49,8 +51,12 @@ for i in `seq 1 ${image_count}`; do
     newAmi=`echo ${IMAGES} | jq .Images[$var].ImageId | sed -e s/\"//g`
     snapShotID=`echo ${IMAGES} | jq .Images[$var].BlockDeviceMappings[0].Ebs.SnapshotId | sed -e s/\"//g`
     echo Tagging AMI ${newAmi} with tag ParentAMI=${AMI}
-    aws --region ${REGION} ec2 create-tags --resources ${newAmi} --tags Key=ParentAMI,Value=${AMI} \
-        Key=ImageStream,Value=${IMAGE_STREAM}
+    aws --region ${REGION} ec2 create-tags --resources ${newAmi} --tags \
+        Key=ParentAMI,Value=${AMI} \
+        Key=ImageStream,Value=${IMAGE_STREAM} \
+        Key="git commit",Value="$(gitCommitHash)" \
+        Key="git origin",Value="$(gitOriginURL)"
+
     aws --region ${REGION} ec2 create-tags --resources ${snapShotID} --tags Key=Name,Value=${AMI_NAME} \
         Key=ImageStream,Value=${IMAGE_STREAM}
     exit 0
