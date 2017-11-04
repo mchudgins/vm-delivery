@@ -75,12 +75,14 @@ sudo systemctl daemon-reload
 # set up the startup script for etcd
 cat <<"EOF" >/tmp/etcd-start
 #! /bin/bash
+
 CA=/usr/local/share/ca-certificates/dst-root.crt
 CERT=/usr/local/etc/etcd/cert.pem
 KEY=/usr/local/etc/etcd/key.pem
 INTERNAL_IP=`curl -s http://169.254.169.254/latest/meta-data/local-ipv4`
-ETCD_NAME=controller-0
-REGION=`curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone | sed 's/[abcdefghijk]$//'`
+CLUSTER_NAME=vpc0
+
+source /etc/default/etcd
 
 if [[ ! -f ${CERT} ]]; then
     aws --region ${REGION} s3 cp s3://dstcorp/etcd/cert.pem ${CERT}
@@ -92,7 +94,7 @@ if [[ ! -f ${KEY} ]]; then
     chmod u-w /usr/local/etc/etcd/key.pem
 fi
 
-OPTS="--name ${ETCD_NAME} \
+OPTS="--name ${NODE_NAME} \
   --cert-file=${CERT} \
   --key-file=${KEY} \
   --peer-cert-file=${CERT} \
@@ -105,8 +107,8 @@ OPTS="--name ${ETCD_NAME} \
   --listen-peer-urls https://${INTERNAL_IP}:2380 \
   --listen-client-urls https://${INTERNAL_IP}:2379,https://127.0.0.1:2379 \
   --advertise-client-urls https://${INTERNAL_IP}:2379 \
-  --initial-cluster-token etcd-cluster-0 \
-  --initial-cluster controller-0=https://10.10.128.10:2380,controller-1=https://10.10.128.11:2380,controller-2=https://10.10.128.12:2380 \
+  --initial-cluster-token ${CLUSTER_NAME} \
+  --initial-cluster ${INITIAL_CLUSTER} \
   --initial-cluster-state new \
   --data-dir=/var/lib/etcd"
 
@@ -148,6 +150,7 @@ EOF
 #sudo chmod +x /etc/rc.local
 
 # clean up
+sudo apt-get autoremove
 sudo apt-get clean
 sudo rm -r /var/lib/apt/lists/*
 rm -rf /tmp/*

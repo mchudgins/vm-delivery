@@ -9,7 +9,7 @@ AMI='ami-cd0f5cb6'
 AMI_NAME="${IMAGE_STREAM}-${TODAY}"
 AMI_DESCRIPTION="etcd based on Ubuntu 16.04 LTS"
 IAM_INSTANCE_PROFILE="ec2PackerInstanceRole"
-INSTANCE_TYPE="t2.medium"
+INSTANCE_TYPE="m4.large"
 REGION="us-east-1"
 SUBNET_ID="subnet-08849b7f"
 SECURITY_GROUP_ID="sg-5ef8153a"
@@ -47,8 +47,11 @@ for i in `seq 1 ${image_count}`; do
   name=`echo ${IMAGES} | jq .Images[$var].Name | sed -e s/\"//g`
   if [[ ${name} == "${AMI_NAME}" ]]; then
     newAmi=`echo ${IMAGES} | jq .Images[$var].ImageId | sed -e s/\"//g`
+    snapShotID=`echo ${IMAGES} | jq .Images[$var].BlockDeviceMappings[0].Ebs.SnapshotId | sed -e s/\"//g`
     echo Tagging AMI ${newAmi} with tag ParentAMI=${AMI}
     aws --region ${REGION} ec2 create-tags --resources ${newAmi} --tags Key=ParentAMI,Value=${AMI} \
+        Key=ImageStream,Value=${IMAGE_STREAM}
+    aws --region ${REGION} ec2 create-tags --resources ${snapShotID} --tags Key=Name,Value=${AMI_NAME} \
         Key=ImageStream,Value=${IMAGE_STREAM}
     exit 0
   fi
