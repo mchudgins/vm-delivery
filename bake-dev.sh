@@ -16,6 +16,8 @@ SECURITY_GROUP_ID="sg-5ef8153a"
 VPC_ID="vpc-94f4ffff"
 VM_NAME=ubuntu-dev-${TODAY}
 
+source helpers/bash_functions
+
 packer build \
     -var "spot_price=auto" \
     -var "spot_price_auto_product=Linux/UNIX" \
@@ -35,6 +37,9 @@ packer build \
 # (we can use this later for inventory management)
 #
 
+# is this a 'dirty' git repo?
+commit=`gitCommitHash`
+
 # retrieve the list of ami's owned by this account
 IMAGES=`aws --region ${REGION} ec2 describe-images --owners self`
 
@@ -47,7 +52,9 @@ for i in `seq 1 ${image_count}`; do
     snapShotID=`echo ${IMAGES} | jq .Images[$var].BlockDeviceMappings[0].Ebs.SnapshotId | sed -e s/\"//g`
     echo Tagging AMI ${newAmi} with tag ParentAMI=${AMI}
     aws --region ${REGION} ec2 create-tags --resources ${newAmi} --tags Key=ParentAMI,Value=${AMI} \
-        Key=ImageStream,Value=${IMAGE_STREAM}
+        Key=ImageStream,Value=${IMAGE_STREAM} \
+        Key="git commit",Value="${commit}" \
+        Key="git origin",Value="$(gitOriginURL)"
     aws --region ${REGION} ec2 create-tags --resources ${snapShotID} --tags Key=Name,Value=${AMI_NAME} \
         Key=ImageStream,Value=${IMAGE_STREAM}
     exit 0

@@ -149,4 +149,4 @@ aws --region ${REGION} ec2 create-tags --resources ${instanceID} --tags Key=Name
 
 #display the instance's IP ADDR
 ipaddr=`aws --region ${REGION} ec2 describe-instances --instance-ids ${instanceID} | jq .Reservations[0].Instances[0].PublicIpAddress`
-echo Instance availabe at ${ipaddr}
+echo Instance available at ${ipaddr}

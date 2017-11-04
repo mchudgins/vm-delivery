@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+
+# is this a 'dirty' git repo?
+function isDirty {
+    # see https://gist.github.com/mjdominus/1486532
+    git rev-parse --verify HEAD > /dev/null && \
+            git update-index --ignore-submodules --refresh > /dev/null && \
+            git diff-files --quiet --ignore-submodules && \
+            git diff-index --cached --quiet HEAD --ignore-submodules -- || \
+            echo -n "dirty"
+    echo -n ""
+}
+
+# return the git commit hash, with (dirty) if working tree is dirty
+function gitCommitHash {
+    commit=`git rev-parse --verify HEAD`
+
+    if [[ -n `isDirty` ]]; then
+        commit="${commit} (dirty)"
+    fi
+
+    echo ${commit}
+}
+
+# return the 'origin' repo URL
+function gitOriginURL {
+    origin=`git remote get-url origin`
+    rc=$?
+    if [[ $rc != 0 ]]; then
+        origin=""
+    fi
+
+    echo ${origin}
+}
