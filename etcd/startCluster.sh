@@ -65,32 +65,11 @@ else
     BID_PRICE=${SPOT_PRICE}
 fi
 
+source ../helpers/bash_functions
+
 # retrieve the list of ami's owned by this account
-IMAGES=`aws --region ${REGION} ec2 describe-images --owners self`
-
-# now find the latest image matching etcd-<date/time>
-ORIGIN_DATE="0000-00-00T00:00:00.000Z"
-MAX_DATE=${ORIGIN_DATE}
-MAX_IMAGE_INDEX=-1
-
-image_count=`echo ${IMAGES} | jq '.[] | length'`
-for i in `seq 1 ${image_count}`; do
-  var=`expr $i - 1`
-  name=`echo ${IMAGES} | jq .Images[$var].Name`
-  IFS='-' read -ra NAME <<< "${name//\"/}"
-  if [[ ${#NAME[@]} -eq 2 ]]; then
-    if [[ ${NAME[0]} == "${IMAGE_STREAM}" ]]; then
-      IMAGE_DATE=`echo ${IMAGES} | jq .Images[$var].CreationDate`
-      if [[ "${MAX_DATE}" < "${IMAGE_DATE}" ]]; then
-        MAX_DATE=${IMAGE_DATE}
-        MAX_IMAGE_INDEX=${var}
-      fi
-    fi
-  fi
-done
-IMAGE_NAME=`echo ${IMAGES} | jq .Images[${MAX_IMAGE_INDEX}].Name`
-IMAGE_ID=`echo ${IMAGES} | jq .Images[${MAX_IMAGE_INDEX}].ImageId`
-echo "Launching ${IMAGE_NAME} (${IMAGE_ID})"
+IMAGE_ID=$(mostRecentAMI ${IMAGE_STREAM})
+echo "Launching ${IMAGE_ID}"
 
 #
 # define 'launchInstance' to spin up a VM on AWS
@@ -132,7 +111,7 @@ echo ${USERDATA} | base64 -d
 FILE=`mktemp`
 cat <<EOF >${FILE}
 {
-    "ImageId": ${IMAGE_ID},
+    "ImageId": "${IMAGE_ID}",
     "KeyName": "${KEY_NAME}",
     "UserData": "${USERDATA}",
     "InstanceType": "${INSTANCE_TYPE}",
@@ -158,36 +137,20 @@ EOF
 
 cat ${FILE}
 
-cmd="aws --region ${REGION} ec2 request-spot-instances --spot-price ${BID_PRICE} --instance-count 1 --type one-time --launch-specification file://${FILE}"
-echo cmd = ${cmd}
-rc=`${cmd}`
-
-requestID=`echo ${rc} | jq .SpotInstanceRequests[0].SpotInstanceRequestId | sed -e 's/"//g'`
-if [[ -z "${requestID}" ]]; then
-    echo "Unable to find Spot Request ID"
+instanceID=$(launchSpotInstance ${REGION} ${BID_PRICE} ${FILE})
+if [[ $? != 0 ]]; then
     exit 1
 fi
 
 rm ${FILE}
 
-# wait up to 5 minutes for an instance & either tag it or exit with error
-sleep 15
-instanceID=`aws --region ${REGION} ec2 describe-spot-instance-requests --spot-instance-request ${requestID} \
-    | jq .SpotInstanceRequests[0].InstanceId | sed -e 's/"//g'`
-echo instanceID ${instanceID}
-
-while [[ "${instanceID}" == "null" ]]
-  do
-  sleep 5
-  instanceID=`aws --region ${REGION} ec2 describe-spot-instance-requests --spot-instance-request ${requestID} \
-    | jq .SpotInstanceRequests[0].InstanceId | sed -e 's/"//g'`
-  done
+# tag the instance
 aws --region ${REGION} ec2 create-tags --resources ${instanceID} \
     --tags Key=Name,Value=${NODE_NAME} Key=Cluster,Value=${CLUSTER_NAME}
 
 #display the instance's IP ADDR
 ipaddr=`aws --region ${REGION} ec2 describe-instances --instance-ids ${instanceID} | jq .Reservations[0].Instances[0].PublicIpAddress`
-echo Instance available at ${ipaddr}
+echo Instance ${instanceID} available at ${ipaddr}
 }
 
 CLUSTER_INIT="etcd0=https://10.10.128.10:2380,etcd1=https://10.10.128.11:2380,etcd2=https://10.10.128.12:2380"
