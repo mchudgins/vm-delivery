@@ -16,7 +16,7 @@ SECURITY_GROUP_ID="sg-5ef8153a"
 VPC_ID="vpc-94f4ffff"
 VM_NAME=ubuntu-dev-${TODAY}
 
-source helpers/bash_functions
+source ../helpers/bash_functions
 
 packer build \
     -var "spot_price=auto" \
