@@ -100,6 +100,7 @@ echo NODE_NAME=${NODE_NAME}       >> ${ENV_FILE}
 echo NODE_IP="${NODE_IP}"         >> ${ENV_FILE}
 echo CLUSTER_NAME=${CLUSTER_NAME} >> ${ENV_FILE}
 echo INITIAL_CLUSTER=${CLUST_INIT} >> ${ENV_FILE}
+echo CLIENT_CA=/usr/local/etc/etcd/client-ca.pem >> ${ENV_FILE}
 
 systemctl start etcd
 _EOF_

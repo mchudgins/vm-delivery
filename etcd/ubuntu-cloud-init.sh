@@ -77,6 +77,7 @@ cat <<"EOF" >/tmp/etcd-start
 #! /bin/bash
 
 CA=/usr/local/share/ca-certificates/dst-root.crt
+CLIENT_CA=/usr/local/share/ca-certificates/dst-root.crt
 CERT=/usr/local/etc/etcd/cert.pem
 KEY=/usr/local/etc/etcd/key.pem
 INTERNAL_IP=`curl -s http://169.254.169.254/latest/meta-data/local-ipv4`
@@ -102,6 +103,7 @@ OPTS="--name ${NODE_NAME} \
   --trusted-ca-file=${CA} \
   --peer-trusted-ca-file=${CA} \
   --peer-client-cert-auth \
+  --trusted-ca-file=${CLIENT_CA} \
   --client-cert-auth \
   --initial-advertise-peer-urls https://${INTERNAL_IP}:2380 \
   --listen-peer-urls https://${INTERNAL_IP}:2380 \
@@ -131,6 +133,7 @@ if [[ ! -f /etc/default/etcd ]]; then
 cat <<EOF_CFG >/etc/default/etcd
 EOF_CFG
 
+    aws --region ${REGION} s3 cp s3://io.dstcorp.vault.${REGION}/etcd-client-ca.pem /usr/local/etc/etcd/client-ca.pem
     aws --region ${REGION} s3 cp s3://io.dstcorp.vault.${REGION}/cert.pem /usr/local/etc/etcd/cert.pem
     aws --region ${REGION} s3 cp s3://io.dstcorp.vault.${REGION}/key.pem /usr/local/etc/etcd/key.pem
     chmod og-rw /usr/local/etc/etcd/key.pem
