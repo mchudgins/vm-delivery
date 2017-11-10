@@ -1,7 +1,6 @@
 #! /bin/bash
 
-ORIGIN_ARTIFACT="s3://dstcorp/artifacts/vault-0.8.3.zip"
-ETCD_ARTIFACT="s3://dstcorp/artifacts/etcd-3.2.7-custom"
+ORIGIN_ARTIFACT="s3://dstcorp/artifacts/openshift-3.6.0.tar.gz"
 
 # hmmmm, need to set the hostname to something the AWS DNS server knows
 sudo hostname `hostname -s`.ec2.internal
@@ -18,6 +17,7 @@ sudo apt-get update -yq
 # or the provisioner will get stuck at an interactive prompt asking about Grub configuration
 # see http://askubuntu.com/questions/146921/how-do-i-apt-get-y-dist-upgrade-without-a-grub-config-prompt
 sudo DEBIAN_FRONTEND=noninteractive apt-get -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" upgrade -yq
+# install dependencies of Openshift + curl + tcpdump and nano for troubleshooting
 sudo apt-get install -yq --no-install-recommends \
   apt-transport-https awscli \
   bash-completion ca-certificates curl e2fsprogs ethtool htop jq \
@@ -37,39 +37,36 @@ sudo update-ca-certificates
 # rather than one per user
 sudo sh -c 'echo "SplitMode=none" >>/etc/systemd/journald.conf'
 
-# create a non-privileged etcd user
-sudo adduser --system --home /var/lib/etcd --gecos 'etcd,,,' --disabled-password etcd
+# create a non-privileged origin user
+sudo adduser --system --home /var/lib/etcd --gecos 'Openshift Origin,,,' --disabled-password openshift
 
-# install & configure VAULT as a single (non-HA) instance using s3 as the backing storage
-aws s3 cp ${VAULT_ARTIFACT} /tmp/vault.zip \
-    && unzip /tmp/vault.zip \
-    && sudo mv vault /usr/local/bin \
-    && aws s3 cp ${ETCD_ARTIFACT} /tmp/etcd \
-    && chmod +x /tmp/etcd \
-    && sudo mv /tmp/etcd /usr/local/bin \
+# install & configure Openshift master
+aws s3 cp ${ORIGIN_ARTIFACT} /tmp/origin.tar.gz \
+    && mkdir /tmp/bin \
+    && sudo tar xvfz /tmp/origin.tar.gz --directory /usr/local/bin --strip-components \
+    && sudo rm /usr/local/bin/README.md /usr/local/bin/LICENSE \
     && sudo mkdir -p /usr/local/etc/etcd \
     && sudo chown etcd /usr/local/etc/etcd \
     && sudo mkdir -p /var/lib/etcd \
     && sudo chown etcd /var/lib/etcd \
     && sudo chown root.root /usr/local/bin/*
 
-# set up the systemd service file for the etcd service
-cat <<"EOF" >/tmp/etcd.service
+# set up the systemd service file for the openshift service
+cat <<"EOF" >/tmp/openshift.service
 [Unit]
-Description=etcd distributed consensus service
+Description=Openshift Master
 
 [Service]
-#EnvironmentFile=-/etc/default/etcd
-User=etcd
+User=openshift
 Group=nogroup
-ExecStart=/usr/local/bin/etcd-start
+ExecStart=/usr/local/bin/openshift-start
 ExecReload=/bin/kill -HUP $MAINPID
 KillMode=process
 Restart=on-failure
 RestartPreventExitStatus=255
 Type=simple
 EOF
-sudo mv /tmp/etcd.service /etc/systemd/system
+sudo mv /tmp/openshift.service /etc/systemd/system
 sudo systemctl daemon-reload
 
 # set up the startup script for etcd
@@ -112,7 +109,7 @@ OPTS="--name ${NODE_NAME} \
   --initial-cluster-state new \
   --data-dir=/var/lib/etcd"
 
-exec /usr/local/bin/etcd ${OPTS}
+exec /usr/local/bin/openshift ${OPTS}
 EOF
 chmod +x /tmp/etcd-start
 sudo cp /tmp/etcd-start /usr/local/bin/etcd-start
