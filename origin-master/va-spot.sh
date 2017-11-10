@@ -17,38 +17,9 @@ KEY_NAME="kp201707"
 SUBNET="subnet-08849b7f"
 IMAGE_STREAM=etcd
 
-if [[ ! /bin/true ]]; then
-    echo SUBNET=${SUBNET}
-    exit 0
-fi
-
 # retrieve the list of ami's owned by this account
-IMAGES=`aws --region ${REGION} ec2 describe-images --owners self`
-#IMAGES=`cat /tmp/images.json`
-
-# now find the latest image matching vault-seed-<date/time>
-ORIGIN_DATE="0000-00-00T00:00:00.000Z"
-MAX_DATE=${ORIGIN_DATE}
-MAX_IMAGE_INDEX=-1
-
-image_count=`echo ${IMAGES} | jq '.[] | length'`
-for i in `seq 1 ${image_count}`; do
-  var=`expr $i - 1`
-  name=`echo ${IMAGES} | jq .Images[$var].Name`
-  IFS='-' read -ra NAME <<< "${name//\"/}"
-  if [[ ${#NAME[@]} -eq 2 ]]; then
-    if [[ ${NAME[0]} == "etcd" ]]; then
-      IMAGE_DATE=`echo ${IMAGES} | jq .Images[$var].CreationDate`
-      if [[ "${MAX_DATE}" < "${IMAGE_DATE}" ]]; then
-        MAX_DATE=${IMAGE_DATE}
-        MAX_IMAGE_INDEX=${var}
-      fi
-    fi
-  fi
-done
-IMAGE_NAME=`echo ${IMAGES} | jq .Images[${MAX_IMAGE_INDEX}].Name`
-IMAGE_ID=`echo ${IMAGES} | jq .Images[${MAX_IMAGE_INDEX}].ImageId`
-echo "Launching ${IMAGE_NAME} (${IMAGE_ID})"
+IMAGE_ID=$(mostRecentAMI ${IMAGE_STREAM})
+echo "Launching ${IMAGE_ID}"
 
 # create the cloud-init user data
 USERDATA=$(cat <<-"_EOF_" | sed -e "s/REGION=xxx/REGION=${REGION}/" | base64 -w 0
@@ -58,10 +29,11 @@ hostname `hostname -s`.ec2.internal
 REGION=xxx
 id >/tmp/id.uid
 date > /tmp/cloud-final
-echo NODE_NAME=controller-0 > /tmp/etcd-config
-echo CLUSTER_NAME=vpc0 >> /tmp/etcd-config
+echo NODE_NAME=master-0 > /tmp/master-config
+echo CLUSTER_NAME=vpc0 >> /tmp/master-config
+cp /tmp/master-config /etcd/defaults/openshift-master
 
-systemctl start etcd
+systemctl start openshift-master
 _EOF_
 )
 
@@ -86,7 +58,7 @@ cat <<EOF >${FILE}
       {
         "DeviceIndex": 0,
         "SubnetId": "${SUBNET}",
-        "PrivateIpAddress": "10.10.128.10",
+        "PrivateIpAddress": "10.10.128.20",
         "Groups": [
             "sg-5ef8153a"
             ]
@@ -128,31 +100,3 @@ aws --region ${REGION} ec2 create-tags --resources ${instanceID} --tags Key=Name
 ipaddr=`aws --region ${REGION} ec2 describe-instances --instance-ids ${instanceID} | jq .Reservations[0].Instances[0].PublicIpAddress`
 echo Instance availabe at ${ipaddr}
 
-# update the DNS entry for this new instance of vault-seed-${REGION}.dstcorp.io
-FILE=`mktemp`
-cat <<EOF >${FILE}
-{
-    "Comment": "Update record to reflect public IP address of instance ${instanceID}",
-    "Changes": [
-        {
-            "Action": "UPSERT",
-            "ResourceRecordSet": {
-                "Name": "vault-seed-${REGION}.dstcorp.io.",
-                "Type": "A",
-                "TTL": 300,
-                "ResourceRecords": [
-                    {
-                        "Value": ${ipaddr}
-                    }
-                ]
-            }
-        }
-    ]
-}
-EOF
-
-ZONEID=`aws route53 list-hosted-zones | jq '.[][] | select(.Name=="dstcorp.io.") | .Id' | sed  -s 's/"//g' | sed -s 's|/hostedzone/||g'`
-#aws route53 change-resource-record-sets --hosted-zone-id ${ZONEID} --change-batch file://${FILE}
-#aws --region ${REGION} ec2 create-tags --resources ${instanceID} --tags Key=DNS,Value=vault-seed-${REGION}.dstcorp.io
-
-rm ${FILE}

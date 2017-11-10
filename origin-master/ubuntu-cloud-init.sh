@@ -45,10 +45,8 @@ aws s3 cp ${ORIGIN_ARTIFACT} /tmp/origin.tar.gz \
     && mkdir /tmp/bin \
     && sudo tar xvfz /tmp/origin.tar.gz --directory /usr/local/bin --strip-components \
     && sudo rm /usr/local/bin/README.md /usr/local/bin/LICENSE \
-    && sudo mkdir -p /usr/local/etc/etcd \
-    && sudo chown etcd /usr/local/etc/etcd \
-    && sudo mkdir -p /var/lib/etcd \
-    && sudo chown etcd /var/lib/etcd \
+    && sudo mkdir -p /usr/local/etc/origin \
+    && sudo chown openshift /usr/local/etc/origin \
     && sudo chown root.root /usr/local/bin/*
 
 # set up the systemd service file for the openshift service
@@ -59,92 +57,38 @@ Description=Openshift Master
 [Service]
 User=openshift
 Group=nogroup
-ExecStart=/usr/local/bin/openshift-start
+ExecStart=/usr/local/bin/openshift-master-start
 ExecReload=/bin/kill -HUP $MAINPID
 KillMode=process
 Restart=on-failure
 RestartPreventExitStatus=255
 Type=simple
 EOF
-sudo mv /tmp/openshift.service /etc/systemd/system
+sudo mv /tmp/openshift.service /etc/systemd/system/openshift-master.service
 sudo systemctl daemon-reload
 
 # set up the startup script for etcd
-cat <<"EOF" >/tmp/etcd-start
+cat <<"EOF" >/tmp/openshift-master-start
 #! /bin/bash
 
-CA=/usr/local/share/ca-certificates/dst-root.crt
-CERT=/usr/local/etc/etcd/cert.pem
-KEY=/usr/local/etc/etcd/key.pem
+CONFIG_DIR=/usr/local/etc/origin
+ETCD_SERVER=https://10.10.128.10:2379
 INTERNAL_IP=`curl -s http://169.254.169.254/latest/meta-data/local-ipv4`
 CLUSTER_NAME=vpc0
 
-source /etc/default/etcd
+source /etc/default/openshift-master
 
-if [[ ! -f ${CERT} ]]; then
-    aws --region ${REGION} s3 cp s3://dstcorp/etcd/cert.pem ${CERT}
+if [[ ! -d ${CONFIG_DIR} ]]; then
+    aws --region ${REGION} s3 cp s3://dstcorp/${CLUSTER_NAME}/config.tar.gz /tmp
+    tar xvfz /tmp/config.tar.gz --directory ${CONFIG_DIR} --strip-components 1 openshift.local.config/master
 fi
 
-if [[ ! -f ${KEY} ]]; then
-    aws --region ${REGION} s3 cp s3://dstcorp/etcd/key.pem  ${KEY}
-    chmod og-rw /usr/local/etc/etcd/key.pem
-    chmod u-w /usr/local/etc/etcd/key.pem
-fi
+OPTS="--config ${CONFIG_DIR}/master/master-config.yaml"
 
-OPTS="--name ${NODE_NAME} \
-  --cert-file=${CERT} \
-  --key-file=${KEY} \
-  --peer-cert-file=${CERT} \
-  --peer-key-file=${KEY} \
-  --trusted-ca-file=${CA} \
-  --peer-trusted-ca-file=${CA} \
-  --peer-client-cert-auth \
-  --client-cert-auth \
-  --initial-advertise-peer-urls https://${INTERNAL_IP}:2380 \
-  --listen-peer-urls https://${INTERNAL_IP}:2380 \
-  --listen-client-urls https://${INTERNAL_IP}:2379,https://127.0.0.1:2379 \
-  --advertise-client-urls https://${INTERNAL_IP}:2379 \
-  --initial-cluster-token ${CLUSTER_NAME} \
-  --initial-cluster ${INITIAL_CLUSTER} \
-  --initial-cluster-state new \
-  --data-dir=/var/lib/etcd"
-
-exec /usr/local/bin/openshift ${OPTS}
+exec /usr/local/bin/openshift start master ${OPTS}
 EOF
-chmod +x /tmp/etcd-start
-sudo cp /tmp/etcd-start /usr/local/bin/etcd-start
-
-# create the rc.local start script
-cat <<"EOF" >/tmp/rc.local
-#! /bin/bash
-hostname `hostname -s`.ec2.internal
-
-if [[ ! -f /etc/default/etcd ]]; then
-    REGION=`curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone | sed 's/[abcdefghijk]$//'`
-
-    # create the initial config for the seed instance of vault
-    # (normally we should use spring cloud config server for this,
-    # but it won't be running yet!)
-cat <<EOF_CFG >/etc/default/etcd
-EOF_CFG
-
-    aws --region ${REGION} s3 cp s3://io.dstcorp.vault.${REGION}/cert.pem /usr/local/etc/etcd/cert.pem
-    aws --region ${REGION} s3 cp s3://io.dstcorp.vault.${REGION}/key.pem /usr/local/etc/etcd/key.pem
-    chmod og-rw /usr/local/etc/etcd/key.pem
-    chmod u-w /usr/local/etc/etcd/key.pem
-    chown -R etcd /usr/local/etc/etcd
-fi
-
-if [[ -f /tmp/etcd-config ]]; then
-    cp /tmp/etcd-config /tmp/found.it
-else
-    date > /tmp/not.found
-fi
-
-systemctl start etcd
-EOF
-#sudo cp /tmp/rc.local /etc/rc.local
-#sudo chmod +x /etc/rc.local
+chmod +x /tmp/openshift-master-start
+sudo cp /tmp/openshift-master-start /usr/local/bin/openshift-master-start
 
 # clean up
 sudo apt-get autoremove

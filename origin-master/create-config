@@ -1,0 +1,68 @@
+#! /bin/bash
+
+OPENSHIFT=bin/openshift
+OADM=bin/oadm
+MASTER_IP=10.10.128.20
+MASTER_DNS=www.dstcorp.io
+ROUTING_DNS=dev.dstcorp.io
+METRICS_DNS=metrics-dev.dstcorp.io
+
+BINDIR=`pwd`
+TMPDIR=`mktemp -d`
+cd ${TMPDIR}
+mkdir bin
+cp /tmp/bin/* bin
+
+echo creating master configuration
+${OPENSHIFT} start master \
+  --listen=https://${MASTER_IP}:8443 \
+  --master=https://${MASTER_IP}:8443 \
+  --public-master=https://${MASTER_DNS} \
+  --etcd=https://10.10.128.5:2379 \
+  --network-plugin=redhat/openshift-ovs-multitenant \
+  --write-config=openshift.local.config/master
+
+# customization's from the default
+#  # configure for AWS
+#sed -i 's/apiServerArguments:.*/apiServerArguments: {cloud-config: [ \/etc\/aws\/aws.conf ], cloud-provider: [ aws ] }/' \
+#  openshift.local.config/master/master-config.yaml
+#sed -i 's/controllerArguments:.*/controllerArguments: {cloud-config: [ \/etc\/aws\/aws.conf ], cloud-provider: [ aws ] }/' \
+#    openshift.local.config/master/master-config.yaml
+#  # configure the router to use the MASTER_DNS
+#sed -i "s/subdomain:.*/subdomain: ${MASTER_DNS}/" \
+#    openshift.local.config/master/master-config.yaml
+${BINDIR}/master-config.py openshift.local.config/master/master-config.yaml \
+  ${ROUTING_DNS} ${METRICS_DNS}
+
+  # grrr, pyyaml puts ticks around 'true' and openshfit doesn't want that.
+  sed -i "s/'true'/true/g" openshift.local.config/master/master-config.yaml
+
+# now that the CA has been created (by the start master cmd),
+# we need to create the node config's and certificates
+# we'll create 'em for the 192.168.1.0/24 subnet
+
+for i in `seq 30 40`; do
+  NODE=10-10-128-$i;
+  NODEIP=10.10.128.$i;
+  echo creating configuration for node ip-${NODE}
+  ${OADM} create-node-config \
+    --node-dir=openshift.local.config/ip-${NODE} \
+    --node=ip-${NODE}.ec2.internal \
+    --hostnames=ip-${NODE}.ec2.internal,${NODEIP} \
+    --network-plugin=redhat/openshift-ovs-multitenant \
+    --master=https://${MASTER_IP}:8443;
+
+  # tweak the mtu settings.  AWS supports an mtu of 9001
+#  sed -i 's/mtu: *1450/mtu: 8951/' openshift.local.config/ip-${NODE}/node-config.yaml
+
+  # set the kubelet arg's
+  echo -e "kubeletArguments:\n  cloud-config:\n  - /etc/aws/aws.conf\n  cloud-provider:\n  - aws" \
+    >> openshift.local.config/ip-${NODE}/node-config.yaml
+done
+
+echo tar\'ing up the result into /tmp/config.tar.gz
+tar cvfz /tmp/config.tar.gz openshift.local.config
+
+cd -
+#rm -rf ${TMPDIR}
+

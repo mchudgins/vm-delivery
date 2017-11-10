@@ -19,6 +19,8 @@ VPC_ID="vpc-94f4ffff"
 # bake the new image
 #
 
+source ../helpers/bash_functions
+
 packer build \
     -var "spot_price=auto" \
     -var "spot_price_auto_product=Linux/UNIX" \
@@ -38,24 +40,4 @@ packer build \
 # (we can use this later for inventory management)
 #
 
-# retrieve the list of ami's owned by this account
-IMAGES=`aws --region ${REGION} ec2 describe-images --owners self`
-
-image_count=`echo ${IMAGES} | jq '.[] | length'`
-for i in `seq 1 ${image_count}`; do
-  var=`expr $i - 1`
-  name=`echo ${IMAGES} | jq .Images[$var].Name | sed -e s/\"//g`
-  if [[ ${name} == "${AMI_NAME}" ]]; then
-    newAmi=`echo ${IMAGES} | jq .Images[$var].ImageId | sed -e s/\"//g`
-    snapShotID=`echo ${IMAGES} | jq .Images[$var].BlockDeviceMappings[0].Ebs.SnapshotId | sed -e s/\"//g`
-    echo Tagging AMI ${newAmi} with tag ParentAMI=${AMI}
-    aws --region ${REGION} ec2 create-tags --resources ${newAmi} --tags Key=ParentAMI,Value=${AMI} \
-        Key=ImageStream,Value=${IMAGE_STREAM}
-    aws --region ${REGION} ec2 create-tags --resources ${snapShotID} --tags Key=Name,Value=${AMI_NAME} \
-        Key=ImageStream,Value=${IMAGE_STREAM}
-    exit 0
-  fi
-done
-
-echo "Unable to tag newly created AMI"
-exit 1
+tagAMI ${AMI_NAME} ${IMAGE_STREAM} ${AMI}
