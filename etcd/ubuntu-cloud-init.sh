@@ -95,6 +95,16 @@ if [[ ! -f ${KEY} ]]; then
     chmod u-w /usr/local/etc/etcd/key.pem
 fi
 
+if [[ "${CLIENT_CA}" == "dstroot.crt" ]]; then
+    CLIENT_CA=/usr/local/share/ca-certificates/dst-root.crt
+else
+    client_ca=/usr/local/etc/etcd/client-ca.crt
+    if [[ ! -f ${client_ca} ]]; then
+        aws --region ${REGION} s3 cp ${CLIENT_CA} ${client_ca}
+    fi
+    CLIENT_CA=${client_ca}
+fi
+
 OPTS="--name ${NODE_NAME} \
   --cert-file=${CERT} \
   --key-file=${KEY} \
@@ -118,39 +128,6 @@ exec /usr/local/bin/etcd ${OPTS}
 EOF
 chmod +x /tmp/etcd-start
 sudo cp /tmp/etcd-start /usr/local/bin/etcd-start
-
-# create the rc.local start script
-cat <<"EOF" >/tmp/rc.local
-#! /bin/bash
-hostname `hostname -s`.ec2.internal
-
-if [[ ! -f /etc/default/etcd ]]; then
-    REGION=`curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone | sed 's/[abcdefghijk]$//'`
-
-    # create the initial config for the seed instance of vault
-    # (normally we should use spring cloud config server for this,
-    # but it won't be running yet!)
-cat <<EOF_CFG >/etc/default/etcd
-EOF_CFG
-
-    aws --region ${REGION} s3 cp s3://io.dstcorp.vault.${REGION}/etcd-client-ca.pem /usr/local/etc/etcd/client-ca.pem
-    aws --region ${REGION} s3 cp s3://io.dstcorp.vault.${REGION}/cert.pem /usr/local/etc/etcd/cert.pem
-    aws --region ${REGION} s3 cp s3://io.dstcorp.vault.${REGION}/key.pem /usr/local/etc/etcd/key.pem
-    chmod og-rw /usr/local/etc/etcd/key.pem
-    chmod u-w /usr/local/etc/etcd/key.pem
-    chown -R etcd /usr/local/etc/etcd
-fi
-
-if [[ -f /tmp/etcd-config ]]; then
-    cp /tmp/etcd-config /tmp/found.it
-else
-    date > /tmp/not.found
-fi
-
-systemctl start etcd
-EOF
-#sudo cp /tmp/rc.local /etc/rc.local
-#sudo chmod +x /etc/rc.local
 
 # clean up
 sudo apt-get autoremove
