@@ -33,7 +33,7 @@ id >/tmp/id.uid
 date > /tmp/cloud-final
 echo NODE_NAME=master-0 > /tmp/master-config
 echo CLUSTER_NAME=vpc0 >> /tmp/master-config
-cp /tmp/master-config /etcd/defaults/openshift-master
+cp /tmp/master-config /etc/default/openshift-master
 
 systemctl start openshift-master
 _EOF_
