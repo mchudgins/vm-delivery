@@ -137,3 +137,37 @@ function launchSpotInstance {
       done
     echo ${instanceID}
 }
+
+function upsertDNS {
+    name=$1
+    ipaddr=$2
+    instanceID=$3
+
+    FILE=`mktemp`
+    cat <<EOF >${FILE}
+{
+    "Comment": "Update record to reflect public IP address of instance ${instanceID}",
+    "Changes": [
+        {
+            "Action": "UPSERT",
+            "ResourceRecordSet": {
+                "Name": "${name}",
+                "Type": "A",
+                "TTL": 300,
+                "ResourceRecords": [
+                    {
+                        "Value": ${ipaddr}
+                    }
+                ]
+            }
+        }
+    ]
+}
+EOF
+
+    ZONEID=`aws route53 list-hosted-zones | jq '.[][] | select(.Name=="dstcorp.io.") | .Id' | sed  -s 's/"//g' | sed -s 's|/hostedzone/||g'`
+    aws route53 change-resource-record-sets --hosted-zone-id ${ZONEID} --change-batch file://${FILE}
+    aws --region ${REGION} ec2 create-tags --resources ${instanceID} --tags Key=DNS,Value=vault-seed-${REGION}.dstcorp.io
+
+    rm ${FILE}
+}

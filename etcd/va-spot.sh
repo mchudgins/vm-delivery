@@ -17,11 +17,6 @@ KEY_NAME="kp201707"
 SUBNET="subnet-08849b7f"
 IMAGE_STREAM=etcd
 
-if [[ ! /bin/true ]]; then
-    echo SUBNET=${SUBNET}
-    exit 0
-fi
-
 source ../helpers/bash_functions
 
 IMAGE_ID=$(mostRecentAMI ${IMAGE_STREAM})
@@ -34,9 +29,14 @@ hostname `hostname -s`.ec2.internal
 
 REGION=xxx
 id >/tmp/id.uid
-date > /tmp/cloud-final
-echo NODE_NAME=controller-0 > /tmp/etcd-config
-echo CLUSTER_NAME=vpc0 >> /tmp/etcd-config
+ENV_FILE=/tmp/etcd
+echo REGION=${REGION}        > ${ENV_FILE}
+echo INSTANCE_ID=3          >> ${ENV_FILE}
+echo NODE_NAME=etcd         >> ${ENV_FILE}
+echo NODE_IP="10.10.128.13" >> ${ENV_FILE}
+echo CLUSTER_NAME=vpc0      >> ${ENV_FILE}
+echo CLIENT_CA=s3://dstcorp/etcd/etcd-client-ca.pem >> ${ENV_FILE}
+cp ${ENV_FILE} /etc/default/etcd
 
 systemctl start etcd
 _EOF_
@@ -83,7 +83,8 @@ fi
 echo instanceID ${instanceID}
 
 # tag the instance
-aws --region ${REGION} ec2 create-tags --resources ${instanceID} --tags Key=Name,Value=${IMAGE_STREAM}
+aws --region ${REGION} ec2 create-tags --resources ${instanceID} \
+    --tags Key=Name,Value=${IMAGE_STREAM}3 Key=Cluster,Value=${CLUSTER_NAME}
 
 #display the instance's IP ADDR
 ipaddr=`aws --region ${REGION} ec2 describe-instances --instance-ids ${instanceID} | jq .Reservations[0].Instances[0].PublicIpAddress`
