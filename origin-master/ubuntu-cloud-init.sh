@@ -43,7 +43,7 @@ sudo adduser --system --home /var/lib/etcd --gecos 'Openshift Origin,,,' --disab
 # install & configure Openshift master
 aws s3 cp ${ORIGIN_ARTIFACT} /tmp/origin.tar.gz \
     && mkdir /tmp/bin \
-    && sudo tar xvfz /tmp/origin.tar.gz --directory /usr/local/bin --strip-components \
+    && sudo tar xvfz /tmp/origin.tar.gz --directory /usr/local/bin --strip-components 1 \
     && sudo rm /usr/local/bin/README.md /usr/local/bin/LICENSE \
     && sudo mkdir -p /usr/local/etc/origin \
     && sudo chown openshift /usr/local/etc/origin \

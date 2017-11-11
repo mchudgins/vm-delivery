@@ -15,7 +15,9 @@ REGION=us-east-1
 INSTANCE_TYPE=m4.large
 KEY_NAME="kp201707"
 SUBNET="subnet-08849b7f"
-IMAGE_STREAM=etcd
+IMAGE_STREAM=master
+
+source ../helpers/bash_functions
 
 # retrieve the list of ami's owned by this account
 IMAGE_ID=$(mostRecentAMI ${IMAGE_STREAM})
@@ -43,7 +45,7 @@ echo ${USERDATA} | base64 -d
 FILE=`mktemp`
 cat <<EOF >${FILE}
 {
-    "ImageId": ${IMAGE_ID},
+    "ImageId": "${IMAGE_ID}",
     "KeyName": "${KEY_NAME}",
     "UserData": "${USERDATA}",
     "InstanceType": "${INSTANCE_TYPE}",
