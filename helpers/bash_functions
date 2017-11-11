@@ -72,7 +72,7 @@ function mostRecentAMI {
     # retrieve the list of ami's owned by this account
     IMAGES=`aws --region ${REGION} ec2 describe-images --owners self`
 
-    # now find the latest image matching etcd-<date/time>
+    # now find the latest image matching <IMAGE_STREAM>-<date/time>
     ORIGIN_DATE="0000-00-00T00:00:00.000Z"
     MAX_DATE=${ORIGIN_DATE}
     MAX_IMAGE_INDEX=-1
@@ -81,25 +81,29 @@ function mostRecentAMI {
     for i in `seq 1 ${image_count}`; do
       var=`expr $i - 1`
       name=`echo ${IMAGES} | jq .Images[$var].Name`
-      IFS='-' read -ra NAME <<< "${name//\"/}"
-      if [[ ${#NAME[@]} -eq 2 ]]; then
-        if [[ ${NAME[0]} == "${IMAGE_STREAM}" ]]; then
-          IMAGE_DATE=`echo ${IMAGES} | jq .Images[$var].CreationDate`
-          if [[ "${MAX_DATE}" < "${IMAGE_DATE}" ]]; then
-            MAX_DATE=${IMAGE_DATE}
-            MAX_IMAGE_INDEX=${var}
-          fi
+      tagLen=`echo ${IMAGES} | jq ".Images[$var].Tags | length"`
+      for j in `seq 1 ${tagLen}`; do
+        iter=`expr $j - 1`
+        tagName=`echo ${IMAGES} | jq .Images[$var].Tags[$iter].Key | sed -e 's/"//g'`
+        if [[ ${tagName} == "ImageStream" ]]; then
+            imageStream=`echo ${IMAGES} | jq .Images[$var].Tags[$iter].Value | sed -e 's/"//g'`
+            if [[ "${IMAGE_STREAM}" == ${imageStream} ]]; then
+              IMAGE_DATE=`echo ${IMAGES} | jq .Images[$var].CreationDate`
+              if [[ "${MAX_DATE}" < "${IMAGE_DATE}" ]]; then
+                MAX_DATE=${IMAGE_DATE}
+                MAX_IMAGE_INDEX=${var}
+              fi
+            fi
         fi
-      fi
+      done
     done
 
-    IMAGE_ID=`echo ${IMAGES} | jq .Images[${MAX_IMAGE_INDEX}].ImageId`
-
-    echo ${IMAGE_ID} | sed -e 's/\"//g'
-
     if [[ ${MAX_IMAGE_INDEX} -eq -1 ]]; then
+        echo "not found"
         return 1
     else
+        IMAGE_ID=`echo ${IMAGES} | jq .Images[${MAX_IMAGE_INDEX}].ImageId`
+        echo ${IMAGE_ID} | sed -e 's/\"//g'
         return 0
     fi
 }
