@@ -33,6 +33,9 @@ id >/tmp/id.uid
 date > /tmp/cloud-final
 echo NODE_NAME=master-0 > /tmp/master-config
 echo CLUSTER_NAME=vpc0 >> /tmp/master-config
+echo "OPENSHIFT_CONFIG=http://10.10.128.6/vpc0/default/vpc0/openshift/master/master-config.yaml" >> /tmp/master-config
+echo "OPENSHIFT_HTPASSWD=http://10.10.128.6/vpc0/default/vpc0/openshift/htpasswd"                >> /tmp/master-config
+
 cp /tmp/master-config /etc/default/openshift-master
 
 systemctl start openshift-master
@@ -71,34 +74,20 @@ EOF
 
 cat ${FILE}
 
-cmd="aws --region ${REGION} ec2 request-spot-instances --spot-price ${BID_PRICE} --instance-count 1 --type one-time --launch-specification file://${FILE}"
-echo cmd = ${cmd}
-rc=`${cmd}`
-echo $rc >/tmp/ohio.json
-
-requestID=`echo ${rc} | jq .SpotInstanceRequests[0].SpotInstanceRequestId | sed -e 's/"//g'`
-if [[ -z "${requestID}" ]]; then
-    echo "Unable to find Spot Request ID"
+# launch the spot instance
+instanceID=$(launchSpotInstance ${REGION} ${BID_PRICE} ${FILE})
+if [[ $? != 0 ]]; then
     exit 1
 fi
 
-rm ${FILE}
-
-# wait up to 5 minutes for an instance & either tag it or exit with error
-sleep 15
-instanceID=`aws --region ${REGION} ec2 describe-spot-instance-requests --spot-instance-request ${requestID} \
-    | jq .SpotInstanceRequests[0].InstanceId | sed -e 's/"//g'`
 echo instanceID ${instanceID}
 
-while [[ "${instanceID}" == "null" ]]
-  do
-  sleep 5
-  instanceID=`aws --region ${REGION} ec2 describe-spot-instance-requests --spot-instance-request ${requestID} \
-    | jq .SpotInstanceRequests[0].InstanceId | sed -e 's/"//g'`
-  done
+rm ${FILE}
+
+#tag the instance
 aws --region ${REGION} ec2 create-tags --resources ${instanceID} --tags Key=Name,Value=${IMAGE_STREAM}
 
 #display the instance's IP ADDR
 ipaddr=`aws --region ${REGION} ec2 describe-instances --instance-ids ${instanceID} | jq .Reservations[0].Instances[0].PublicIpAddress`
-echo Instance availabe at ${ipaddr}
+echo Instance available at ${ipaddr}
 
