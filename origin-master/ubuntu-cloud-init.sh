@@ -1,5 +1,7 @@
 #! /bin/bash
 
+ZONE=`curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone`
+REGION=`echo ${ZONE} | sed 's/[a-z]$//'`
 ORIGIN_ARTIFACT="s3://dstcorp/artifacts/openshift-3.6.0.tar.gz"
 
 # hmmmm, need to set the hostname to something the AWS DNS server knows
@@ -49,6 +51,11 @@ aws s3 cp ${ORIGIN_ARTIFACT} /tmp/origin.tar.gz \
     && sudo chown openshift /usr/local/etc/origin \
     && sudo chown root.root /usr/local/bin/*
 
+# set up the aws.conf file
+echo "[Global]"        >/tmp/aws.conf
+echo "Zone = ${ZONE}" >>/tmp/aws.conf
+sudo cp /tmp/aws.conf /usr/local/etc/origin/aws.conf
+
 # set up the systemd service file for the openshift service
 cat <<"EOF" >/tmp/openshift.service
 [Unit]
@@ -72,20 +79,43 @@ cat <<"EOF" >/tmp/openshift-master-start
 #! /bin/bash
 
 REGION=`curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone | sed 's/[a-z]$//'`
-CONFIG_DIR=/usr/local/etc/origin/master
+CONFIG_DIR=/usr/local/etc/origin
 ETCD_SERVER=https://10.10.128.10:2379
 INTERNAL_IP=`curl -s http://169.254.169.254/latest/meta-data/local-ipv4`
 CLUSTER_NAME=vpc0
+OPENSHIFT_CONFIG=https://config.dstcorp.io/openshift/default/master/openshift/master/master-config.yaml
+OPENSHIFT_HTPASSWD=https://config.dstcorp.io/openshift/default/master/openshift/htpasswd
 
 source /etc/default/openshift-master
 
-if [[ ! -d ${CONFIG_DIR} ]]; then
+function fetchFile {
+URL=$1
+FILE=$2
+
+    curl -sL ${URL} -o ${FILE}
+    if [[ $? != 0 ]]; then
+        echo "Warning: Unable to retrieve ${URL}; trying again in 2 minutes"
+        sleep 120
+
+        curl -sL ${URL} -o ${FILE}
+        rc=$?
+        if [[ $rc != 0 ]]; then
+            echo "Error: Unable to retrieve ${URL}; Error $rc."
+            exit $rc
+        fi
+    fi
+}
+
+if [[ ! -d ${CONFIG_DIR}/master ]]; then
     aws --region ${REGION} s3 cp s3://dstcorp/${CLUSTER_NAME}/config.tar.gz /tmp
-    mkdir -p ${CONFIG_DIR}
-    tar xvfz /tmp/config.tar.gz --directory ${CONFIG_DIR} --strip-components 2 openshift.local.config/master
+    mkdir -p ${CONFIG_DIR}/master
+    tar xvfz /tmp/config.tar.gz --directory ${CONFIG_DIR}/master --strip-components 2 openshift.local.config/master
 fi
 
-OPTS="--config ${CONFIG_DIR}/master-config.yaml"
+fetchFile ${OPENSHIFT_CONFIG} ${CONFIG_DIR}/master/master-config.yaml
+fetchFile ${OPENSHIFT_HTPASSWD} ${CONFIG_DIR}/htpasswd
+
+OPTS="--config ${CONFIG_DIR}/master/master-config.yaml"
 
 exec /usr/local/bin/openshift start master ${OPTS}
 EOF
