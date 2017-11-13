@@ -171,7 +171,7 @@ EOF
 
     ZONEID=`aws route53 list-hosted-zones | jq '.[][] | select(.Name=="dstcorp.io.") | .Id' | sed  -s 's/"//g' | sed -s 's|/hostedzone/||g'`
     aws route53 change-resource-record-sets --hosted-zone-id ${ZONEID} --change-batch file://${FILE}
-    aws --region ${REGION} ec2 create-tags --resources ${instanceID} --tags Key=DNS,Value=${NAME}
+    aws --region ${REGION} ec2 create-tags --resources ${instanceID} --tags Key=DNS,Value=${name}
 
     rm ${FILE}
 }
