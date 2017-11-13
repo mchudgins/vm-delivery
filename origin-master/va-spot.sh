@@ -16,6 +16,7 @@ INSTANCE_TYPE=m4.large
 KEY_NAME="kp201707"
 SUBNET="subnet-08849b7f"
 IMAGE_STREAM=master
+CLUSTER_NAME=vpc0
 
 source ../helpers/bash_functions
 
@@ -85,7 +86,9 @@ echo instanceID ${instanceID}
 rm ${FILE}
 
 #tag the instance
-aws --region ${REGION} ec2 create-tags --resources ${instanceID} --tags Key=Name,Value=${IMAGE_STREAM}
+aws --region ${REGION} ec2 create-tags --resources ${instanceID} \
+    --tags Key=Name,Value=${IMAGE_STREAM} Key=Cluster,Value=${CLUSTER_NAME}
+
 
 #display the instance's IP ADDR
 ipaddr=`aws --region ${REGION} ec2 describe-instances --instance-ids ${instanceID} | jq .Reservations[0].Instances[0].PublicIpAddress`

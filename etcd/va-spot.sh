@@ -16,6 +16,7 @@ INSTANCE_TYPE=m4.large
 KEY_NAME="kp201707"
 SUBNET="subnet-08849b7f"
 IMAGE_STREAM=etcd
+CLUSTER_NAME=vpc0
 
 source ../helpers/bash_functions
 
