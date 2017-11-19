@@ -109,18 +109,17 @@ FILE=$2
 if [[ ! -d ${CONFIG_DIR}/node ]]; then
     aws --region ${REGION} s3 cp s3://dstcorp/${CLUSTER_NAME}/config.tar.gz /tmp
     mkdir -p ${CONFIG_DIR}/node
-    tar xvfz /tmp/config.tar.gz --directory ${CONFIG_DIR}/node --strip-components 2 openshift.local.config/node
+    tar xvfz /tmp/config.tar.gz --directory ${CONFIG_DIR}/node --strip-components 2 openshift.local.config/${NODE_NAME}
 fi
 
-fetchFile ${OPENSHIFT_CONFIG} ${CONFIG_DIR}/master/master-config.yaml
-fetchFile ${OPENSHIFT_HTPASSWD} ${CONFIG_DIR}/htpasswd
+fetchFile ${OPENSHIFT_CONFIG} ${CONFIG_DIR}/node/node-config.yaml
 
-OPTS="--config ${CONFIG_DIR}/master/master-config.yaml"
+OPTS="--config ${CONFIG_DIR}/node/node-config.yaml"
 
-exec /usr/local/bin/openshift start master ${OPTS}
+exec /usr/local/bin/openshift start node ${OPTS}
 EOF
-chmod +x /tmp/openshift-master-start
-sudo cp /tmp/openshift-master-start /usr/local/bin/openshift-master-start
+chmod +x /tmp/openshift-node-start
+sudo cp /tmp/openshift-node-start /usr/local/bin/openshift-node-start
 
 # clean up
 sudo apt-get autoremove

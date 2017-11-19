@@ -32,14 +32,12 @@ hostname `hostname -s`.ec2.internal
 REGION=xxx
 id >/tmp/id.uid
 date > /tmp/cloud-final
-echo NODE_NAME=master-0 > /tmp/master-config
-echo CLUSTER_NAME=vpc0 >> /tmp/master-config
-echo "OPENSHIFT_CONFIG=http://10.10.128.6/vpc0/default/vpc0/openshift/master/master-config.yaml" >> /tmp/master-config
-echo "OPENSHIFT_HTPASSWD=http://10.10.128.6/vpc0/default/vpc0/openshift/htpasswd"                >> /tmp/master-config
+echo CLUSTER_NAME=vpc0 >> /tmp/node-config
+echo "OPENSHIFT_CONFIG=http://10.10.128.6/vpc0/default/vpc0/openshift/node/node-config.yaml" >> /tmp/node-config
 
-cp /tmp/master-config /etc/default/openshift-master
+cp /tmp/node-config /etc/default/openshift-node
 
-systemctl start openshift-master
+systemctl start openshift-node
 _EOF_
 )
 
@@ -64,7 +62,7 @@ cat <<EOF >${FILE}
       {
         "DeviceIndex": 0,
         "SubnetId": "${SUBNET}",
-        "PrivateIpAddress": "10.10.128.20",
+        "PrivateIpAddress": "10.10.128.30",
         "Groups": [
             "sg-5ef8153a"
             ]
@@ -87,7 +85,7 @@ rm ${FILE}
 
 #tag the instance
 aws --region ${REGION} ec2 create-tags --resources ${instanceID} \
-    --tags Key=Name,Value=${IMAGE_STREAM} Key=Cluster,Value=${CLUSTER_NAME}
+    --tags Key=Name,Value=${IMAGE_STREAM} Key=Cluster,Value=${CLUSTER_NAME} Key=Node,Value=ip-10-10-128-30
 
 
 #display the instance's IP ADDR
