@@ -40,7 +40,7 @@ sudo update-ca-certificates
 sudo sh -c 'echo "SplitMode=none" >>/etc/systemd/journald.conf'
 
 # create a non-privileged origin user
-sudo adduser --system --home /var/lib/etcd --gecos 'Openshift Origin,,,' --disabled-password openshift
+sudo adduser --system --home /var/lib/origin --gecos 'Openshift Origin,,,' --disabled-password openshift
 
 # install & configure Openshift master
 aws s3 cp ${ORIGIN_ARTIFACT} /tmp/origin.tar.gz \
