@@ -56,6 +56,18 @@ echo "[Global]"        >/tmp/aws.conf
 echo "Zone = ${ZONE}" >>/tmp/aws.conf
 sudo cp /tmp/aws.conf /usr/local/etc/origin/aws.conf
 
+# route DNS requests to listener on port 8053
+# note: need to save iptables across reboots via ifconfig up/down
+sudo iptables -t nat -A PREROUTING -p udp --dport 53 -j REDIRECT --to-port 8053
+sudo iptables-save >/tmp/iptables.conf
+sudo cp /tmp/iptables.conf /etc
+cat <<"EOF" >/tmp/iptables
+#! /usr/bin/env bash
+iptables-restore < /etc/iptables.conf
+EOF
+chmod +x /tmp/iptables
+sudo cp /tmp/iptables /etc/network/if-up.d/iptables
+
 # set up the systemd service file for the openshift service
 cat <<"EOF" >/tmp/openshift.service
 [Unit]
@@ -122,6 +134,11 @@ exec /usr/local/bin/openshift start master ${OPTS}
 EOF
 chmod +x /tmp/openshift-master-start
 sudo cp /tmp/openshift-master-start /usr/local/bin/openshift-master-start
+
+# make it easy to work with Openshift after ssh'ing in
+cat <<EOF >$HOME/.bash_aliases
+alias oc='sudo /usr/local/bin/oc --config /usr/local/etc/origin/master/admin.kubeconfig'
+EOF
 
 # clean up
 sudo apt-get autoremove
