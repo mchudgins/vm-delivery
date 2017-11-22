@@ -1,8 +1,9 @@
 #! /bin/bash
 
+VERSION=3.6.1
 ZONE=`curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone`
 REGION=`echo ${ZONE} | sed 's/[a-z]$//'`
-ORIGIN_ARTIFACT="s3://dstcorp/artifacts/openshift-3.6.0.tar.gz"
+ORIGIN_ARTIFACT="s3://dstcorp/artifacts/origin-${VERSION}.tar.gz"
 
 # hmmmm, need to set the hostname to something the AWS DNS server knows
 NODENAME=`hostname -s`
@@ -39,11 +40,8 @@ sudo add-apt-repository \
    stable"
 sudo apt-get update
 sudo apt-get install -yq --no-install-recommends docker-ce
-ls -al /etc/systemd/system/multi-user.target.wants
 sudo sed -i 's|ExecStart.*|ExecStart=/usr/bin/dockerd -H fd:// --insecure-registry=172.30.0.0/16 --exec-opt native.cgroupdriver=systemd|g' \
     /lib/systemd/system/docker.service
-ls -al /etc/systemd/system/multi-user.target.wants
-cat /etc/systemd/system/multi-user.target.wants/docker.service
 sudo systemctl daemon-reload
 sudo systemctl enable docker
 
@@ -62,9 +60,11 @@ sudo addgroup openshift docker
 
 # install & configure Openshift node
 aws s3 cp ${ORIGIN_ARTIFACT} /tmp/origin.tar.gz \
-    && mkdir /tmp/bin \
-    && sudo tar xvfz /tmp/origin.tar.gz --directory /usr/local/bin --strip-components 1 \
-    && sudo rm /usr/local/bin/README.md /usr/local/bin/LICENSE \
+    && sudo tar xvfz /tmp/origin.tar.gz --directory /usr/local/bin \
+    && sudo mkdir -p /opt/cni/bin \
+    && sudo ln -s /usr/local/bin/host-local /opt/cni/bin \
+    && sudo ln -s /usr/local/bin/loopback /opt/cni/bin \
+    && sudo ln -s /usr/local/bin/sdn-cni-plugin /opt/cni/bin/openshift-sdn \
     && sudo mkdir -p /usr/local/etc/origin \
     && sudo chown openshift /usr/local/etc/origin \
     && sudo chown root.root /usr/local/bin/*
@@ -82,10 +82,13 @@ Description=Openshift Node
 [Service]
 #User=openshift
 Group=nogroup
-ExecStart=/usr/local/bin/openshift-node-start
+ExecStartPre=/usr/local/bin/openshift-node-start
+ExecStart=/usr/local/bin/openshift start node --config /usr/local/etc/origin/node/node-config.yaml
 ExecReload=/bin/kill -HUP $MAINPID
+WorkingDirectory=/var/lib/origin
 KillMode=process
 Restart=on-failure
+RestartSec=5
 RestartPreventExitStatus=255
 Type=simple
 EOF
@@ -101,7 +104,7 @@ CONFIG_DIR=/usr/local/etc/origin
 INTERNAL_IP=`curl -s http://169.254.169.254/latest/meta-data/local-ipv4`
 CLUSTER_NAME=vpc0
 NODE_NAME=`hostname -s`
-OPENSHIFT_CONFIG=https://config.dstcorp.io/openshift/default/master/openshift/master/master-config.yaml
+OPENSHIFT_CONFIG=https://config.dstcorp.io/openshift/default/master/openshift/node/node-config.yaml
 
 source /etc/default/openshift-node
 
@@ -130,10 +133,6 @@ if [[ ! -d ${CONFIG_DIR}/node ]]; then
 fi
 
 fetchFile ${OPENSHIFT_CONFIG} ${CONFIG_DIR}/node/node-config.yaml
-
-OPTS="--config ${CONFIG_DIR}/node/node-config.yaml"
-
-exec /usr/local/bin/openshift start node ${OPTS}
 EOF
 chmod +x /tmp/openshift-node-start
 sudo cp /tmp/openshift-node-start /usr/local/bin/openshift-node-start
