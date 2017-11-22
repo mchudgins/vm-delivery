@@ -8,7 +8,7 @@ else
 fi
 
 #
-# configuration
+# default configuration
 #
 
 REGION=us-east-1
@@ -17,6 +17,58 @@ KEY_NAME="kp201707"
 SUBNET="subnet-08849b7f"
 IMAGE_STREAM=node
 CLUSTER_NAME=vpc0
+NODE_NUM=0
+
+#
+# flags from command line may supersede defaults
+#
+
+while test $# -gt 0; do
+    case "$1" in
+        --node)
+            shift
+            NODE_NUM=$1
+            ;;
+
+        --cluster)
+            shift
+            CLUSTER_NAME=$1
+            ;;
+
+        -h|--help)
+            echo `basename $0` '--region (us-east-1|us-west-2)'
+            ;;
+
+        --instance-type)
+            shift
+            INSTANCE_TYPE=$1
+            ;;
+
+        --key-name)
+            shift
+            KEY_NAME=$1
+            ;;
+
+        --region)
+            shift
+            REGION=$1
+            ;;
+
+        --spot-price)
+            shift
+            SPOT_PRICE=$1
+            ;;
+
+        --subnet)
+            shift
+            SUBNET=$1
+            ;;
+
+         *)
+            break
+            ;;
+    esac
+done
 
 source ../helpers/bash_functions
 
@@ -62,7 +114,7 @@ cat <<EOF >${FILE}
       {
         "DeviceIndex": 0,
         "SubnetId": "${SUBNET}",
-        "PrivateIpAddress": "10.10.128.30",
+        "PrivateIpAddress": "10.10.128.$(expr 30 + ${NODE_NUM})",
         "Groups": [
             "sg-5ef8153a"
             ]
@@ -85,7 +137,7 @@ rm ${FILE}
 
 #tag the instance
 aws --region ${REGION} ec2 create-tags --resources ${instanceID} \
-    --tags Key=Name,Value=${IMAGE_STREAM}0 Key=Cluster,Value=${CLUSTER_NAME} Key=Node,Value=ip-10-10-128-30
+    --tags Key=Name,Value=${IMAGE_STREAM}${NODE_NUM} Key=Cluster,Value=${CLUSTER_NAME} Key=Node,Value=ip-10-10-128-30
 
 
 #display the instance's IP ADDR

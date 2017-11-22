@@ -104,6 +104,7 @@ CONFIG_DIR=/usr/local/etc/origin
 INTERNAL_IP=`curl -s http://169.254.169.254/latest/meta-data/local-ipv4`
 CLUSTER_NAME=vpc0
 NODE_NAME=`hostname -s`
+HOSTNAME=`hostname`
 OPENSHIFT_CONFIG=https://config.dstcorp.io/openshift/default/master/openshift/node/node-config.yaml
 
 source /etc/default/openshift-node
@@ -133,6 +134,7 @@ if [[ ! -d ${CONFIG_DIR}/node ]]; then
 fi
 
 fetchFile ${OPENSHIFT_CONFIG} ${CONFIG_DIR}/node/node-config.yaml
+sed -e "s/nodeName:.*/nodeName: ${HOSTNAME}/g" -i ${CONFIG_DIR}/node/node-config.yaml
 EOF
 chmod +x /tmp/openshift-node-start
 sudo cp /tmp/openshift-node-start /usr/local/bin/openshift-node-start
