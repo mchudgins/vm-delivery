@@ -25,11 +25,27 @@ sudo apt-get install -yq --no-install-recommends \
   apt-transport-https awscli \
   bash-completion ca-certificates curl e2fsprogs ethtool htop jq \
   linux-image-extra-virtual nano \
-  net-tools tcpdump unzip
+  net-tools openvswitch-switch tcpdump unzip
 
 # stop unattended upgrades -- that's why we have baked images!
 sudo apt-get remove -yq unattended-upgrades
 sudo apt-get autoremove -yq
+
+# docker
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+sudo add-apt-repository \
+   "deb [arch=amd64] https://download.docker.com/linux/ubuntu \
+   $(lsb_release -cs) \
+   stable"
+sudo apt-get update
+sudo apt-get install -yq --no-install-recommends docker-ce
+ls -al /etc/systemd/system/multi-user.target.wants
+sudo sed -i 's|ExecStart.*|ExecStart=/usr/bin/dockerd -H fd:// --insecure-registry=172.30.0.0/16 --exec-opt native.cgroupdriver=systemd|g' \
+    /lib/systemd/system/docker.service
+ls -al /etc/systemd/system/multi-user.target.wants
+cat /etc/systemd/system/multi-user.target.wants/docker.service
+sudo systemctl daemon-reload
+sudo systemctl enable docker
 
 # DST Root CA
 aws s3 cp s3://dstcorp/dst-root.crt /tmp
@@ -42,6 +58,7 @@ sudo sh -c 'echo "SplitMode=none" >>/etc/systemd/journald.conf'
 
 # create a non-privileged origin user
 sudo adduser --system --home /var/lib/origin --gecos 'Openshift Origin,,,' --disabled-password openshift
+sudo addgroup openshift docker
 
 # install & configure Openshift node
 aws s3 cp ${ORIGIN_ARTIFACT} /tmp/origin.tar.gz \
@@ -63,7 +80,7 @@ cat <<"EOF" >/tmp/openshift.service
 Description=Openshift Node
 
 [Service]
-User=openshift
+#User=openshift
 Group=nogroup
 ExecStart=/usr/local/bin/openshift-node-start
 ExecReload=/bin/kill -HUP $MAINPID
