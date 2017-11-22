@@ -4,6 +4,7 @@
 # a 'vault' machine image.
 #
 IMAGE_STREAM='master'
+ARTIFACT_VERSION="3.6.1"
 TODAY=`date +%Y%m%d%H%M`
 AMI='ami-cd0f5cb6'
 AMI_NAME="${IMAGE_STREAM}-${TODAY}"
@@ -33,6 +34,7 @@ packer build \
 	-var "subnet_id=${SUBNET_ID}" \
 	-var "vpc_id=${VPC_ID}" \
 	-var "security_group_id=${SECURITY_GROUP_ID}" \
+	-var "artifact_version=${ARTIFACT_VERSION}" \
 	ubuntu.json | tee ${IMAGE_STREAM}-${TODAY}.log
 
 #

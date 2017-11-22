@@ -1,8 +1,9 @@
 #! /bin/bash
 
+VERSION=3.6.1
 ZONE=`curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone`
 REGION=`echo ${ZONE} | sed 's/[a-z]$//'`
-ORIGIN_ARTIFACT="s3://dstcorp/artifacts/openshift-3.6.0.tar.gz"
+ORIGIN_ARTIFACT="s3://dstcorp/artifacts/origin-${VERSION}.tar.gz"
 
 # hmmmm, need to set the hostname to something the AWS DNS server knows
 sudo hostname `hostname -s`.ec2.internal
@@ -45,8 +46,7 @@ sudo adduser --system --home /var/lib/origin --gecos 'Openshift Origin,,,' --dis
 # install & configure Openshift master
 aws s3 cp ${ORIGIN_ARTIFACT} /tmp/origin.tar.gz \
     && mkdir /tmp/bin \
-    && sudo tar xvfz /tmp/origin.tar.gz --directory /usr/local/bin --strip-components 1 \
-    && sudo rm /usr/local/bin/README.md /usr/local/bin/LICENSE \
+    && sudo tar xvfz /tmp/origin.tar.gz --directory /usr/local/bin \
     && sudo mkdir -p /usr/local/etc/origin \
     && sudo chown openshift /usr/local/etc/origin \
     && sudo chown root.root /usr/local/bin/*
