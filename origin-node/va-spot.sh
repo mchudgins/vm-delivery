@@ -85,7 +85,7 @@ rm ${FILE}
 
 #tag the instance
 aws --region ${REGION} ec2 create-tags --resources ${instanceID} \
-    --tags Key=Name,Value=${IMAGE_STREAM} Key=Cluster,Value=${CLUSTER_NAME} Key=Node,Value=ip-10-10-128-30
+    --tags Key=Name,Value=${IMAGE_STREAM}0 Key=Cluster,Value=${CLUSTER_NAME} Key=Node,Value=ip-10-10-128-30
 
 
 #display the instance's IP ADDR
