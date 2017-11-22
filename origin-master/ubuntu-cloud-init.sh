@@ -110,6 +110,7 @@ if [[ ! -d ${CONFIG_DIR}/master ]]; then
     aws --region ${REGION} s3 cp s3://dstcorp/${CLUSTER_NAME}/config.tar.gz /tmp
     mkdir -p ${CONFIG_DIR}/master
     tar xvfz /tmp/config.tar.gz --directory ${CONFIG_DIR}/master --strip-components 2 openshift.local.config/master
+    rm /tmp/config.tar.gz
 fi
 
 fetchFile ${OPENSHIFT_CONFIG} ${CONFIG_DIR}/master/master-config.yaml
