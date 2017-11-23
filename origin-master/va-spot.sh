@@ -54,7 +54,7 @@ cat <<EOF >${FILE}
     "UserData": "${USERDATA}",
     "InstanceType": "${INSTANCE_TYPE}",
     "IamInstanceProfile": {
-        "Name": "ec2PackerInstanceRole"
+        "Name": "oso-master"
     },
     "EbsOptimized": true,
     "Monitoring": {
