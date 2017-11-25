@@ -175,3 +175,23 @@ EOF
 
     rm ${FILE}
 }
+
+# find a VPC in the region with a specified tag
+function findVPCWithTag {
+REGION=$1
+TAGKEY=$2
+
+value=`aws --region ${REGION} ec2 describe-vpcs --filters Name="tag-key",Values="${TAGKEY}" | jq .Vpcs[0].VpcId | sed 's/"//g'`
+echo ${value}
+}
+
+# find a subnet with a specified tag
+function findSubnetWithTag {
+region=$1
+vpc=$2
+tagkey=$3
+
+aws --region ${region} ec2 describe-subnets --filters Name=vpc-id,Values="${vpc}" Name=tag-key,Values="${tagkey}" \
+    | jq .Subnets[0].SubnetId \
+    | sed 's/"//g'
+}
