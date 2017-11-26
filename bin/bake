@@ -28,6 +28,11 @@ while test $# -gt 0; do
             IMAGE_STREAM=$1
             ;;
 
+        --artifact-version)
+            shift
+            ARTIFACT_VERSION=$1
+            ;;
+
         --instance-type)
             shift
             INSTANCE_TYPE=$1
@@ -145,11 +150,12 @@ echo "VPC_ID                 = ${vpc}"
 echo "SECURITY_GROUP_ID      = ${SECURITY_GROUP_ID}"
 echo "INIT_SCRIPT            = ${INIT_SCRIPT}"
 
-echo packer build \
+packer build \
     -var "spot_price=auto" \
     -var "spot_price_auto_product=Linux/UNIX" \
 	-var "ami_name=${AMI_NAME}" \
 	-var "ami_description=${AMI_DESCRIPTION}" \
+	-var "artifact_version=${ARTIFACT_VERSION}" \
 	-var "iam_instance_profile=${IAM_INSTANCE_PROFILE}" \
 	-var "instance_type=${INSTANCE_TYPE}" \
 	-var "source_ami=${PARENT_AMI}" \
@@ -158,11 +164,14 @@ echo packer build \
 	-var "vpc_id=${VPC_ID}" \
 	-var "security_group_id=${SECURITY_GROUP_ID}" \
 	-var "cloud-init-script=${INIT_SCRIPT}" \
-	aws-bake.json | tee ${AMI_NAME}.log
+	-var "image_stream=${IMAGE_STREAM}" \
+	-var "git_commit=$(gitCommitHash)" \
+	-var "git_origin=$(gitOriginURL)" \
+	aws-bake.json | tee ${IMAGE_STREAM}/${AMI_NAME}.log
 
 #
 # tag the newly created AMI with the parent's AMI ID
 # (we can use this later for inventory management)
 #
 
-echo tagAMI ${AMI_NAME} ${IMAGE_STREAM} ${PARENT_AMI}
+#echo tagAMI ${AMI_NAME} ${IMAGE_STREAM} ${PARENT_AMI}
