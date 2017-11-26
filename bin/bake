@@ -3,39 +3,39 @@
 # This script launches the packer builder to create
 # a 'ubuntu-dev' development virtual machine image.
 #
-IMAGE_STREAM='ubuntu-base'
+
+IMAGE_STREAM=''
 TODAY=`date +%Y%m%d%H%M`
-AMI='ami-cd0f5cb6'
-AMI_NAME="${IMAGE_STREAM}-${TODAY}"
-AMI_DESCRIPTION="Base Linux on Ubuntu 16.04 LTS"
+PARENT_AMI=''
+AMI_DESCRIPTION=""
 IAM_INSTANCE_PROFILE="ec2PackerInstanceRole"
 INSTANCE_TYPE="t2.medium"
 REGION="us-east-1"
-SUBNET_ID="subnet-08849b7f"
+VPC_ID=""
+SUBNET_ID=""
 SECURITY_GROUP_ID="sg-5ef8153a"
-VPC_ID="vpc-94f4ffff"
-VM_NAME=${IMAGE_STREAM}-${TODAY}
-INIT_SCRIPT=ubuntu/ubuntu-cloud-init.sh
+INIT_SCRIPT=""
 
 while test $# -gt 0; do
     case "$1" in
-        --node)
+        --parent)
             shift
-            NODE_NUM=$1
+            PARENT_AMI=$1
             ;;
 
-        --cluster)
+        --image-stream)
             shift
-            CLUSTER_NAME=$1
-            ;;
-
-        -h|--help)
-            echo `basename $0` '--region (us-east-1|us-west-2)'
+            IMAGE_STREAM=$1
             ;;
 
         --instance-type)
             shift
             INSTANCE_TYPE=$1
+            ;;
+
+        --description)
+            shift
+            AMI_DESCRIPTION=$1
             ;;
 
         --key-name)
@@ -58,33 +58,111 @@ while test $# -gt 0; do
             SUBNET=$1
             ;;
 
+        --vpc)
+            shift
+            VPC_ID=$1
+            ;;
+
+        -h|--help)
+            echo `basename $0` '--region (us-east-1|us-west-2)' '--parent <ami-id>' '--image-stream name' '--description <ami desc>' '<ami creation script>'
+            ;;
+
          *)
             break
             ;;
     esac
-done
 
+    shift
+done
 
 source helpers/bash_functions
 
-packer build \
+target=$1
+if [[ -z "${target}" ]]; then
+    echo "missing an AMI baking script"
+    echo -e "\t usage:  `basename $0` <script>"
+    exit -1
+fi
+INIT_SCRIPT=$target
+
+#
+# arg's gathered, start digesting 'em
+#
+
+if [[ -z "${VPC_ID}" ]]; then
+    vpc=`findVPCWithTag ${REGION} Bakery`
+    echo VPC ${vpc}
+    if [[ -z "${vpc}" || "${vpc}" == "null" ]]; then
+        echo "Unable to find a Bakery VPC"
+        exit 1
+    fi
+
+    VPC_ID=${vpc}
+fi
+
+if [[ -z "${SUBNET_ID}" ]]; then
+
+    subnet=`findSubnetWithTag ${REGION} ${VPC_ID} Bakery`
+    echo Subnet ${subnet}
+    if [[ -z "${subnet}" || "${subnet}" == "null" ]]; then
+        echo "Unable to find a Bakery subnet"
+        exit 2
+    fi
+
+    SUBNET_ID=${subnet}
+fi
+
+if [[ -z "${IMAGE_STREAM}" ]]; then
+    echo "missing --image-stream <stream name>"
+    exit 3
+fi
+
+if [[ -z "${AMI_DESCRIPTION}" ]]; then
+    echo 'missing --description <desc>'
+    exit 4
+fi
+
+echo parent ${PARENT_AMI}
+if [[ -z "${PARENT_AMI}" ]]; then
+    echo 'missing --parent <ami-id>'
+    exit 4
+fi
+
+#
+# args processed, let's bake an AMI
+#
+
+AMI_NAME="${IMAGE_STREAM}-${TODAY}"
+#VM_NAME="${IMAGE_STREAM}-${TODAY}"
+
+echo "AMI_NAME               = ${AMI_NAME}"
+echo "AMI_DESCRIPTION        = ${AMI_DESCRIPTION}"
+echo "IAM_INSTANCE_PROFILE   = ${IAM_INSTANCE_PROFILE}"
+echo "PARENT_AMI             = ${PARENT_AMI}"
+echo "REGION                 = ${REGION}"
+echo "SUBNET_ID              = ${SUBNET_ID}"
+echo "VPC_ID                 = ${vpc}"
+echo "SECURITY_GROUP_ID      = ${SECURITY_GROUP_ID}"
+echo "INIT_SCRIPT            = ${INIT_SCRIPT}"
+
+echo packer build \
     -var "spot_price=auto" \
     -var "spot_price_auto_product=Linux/UNIX" \
 	-var "ami_name=${AMI_NAME}" \
 	-var "ami_description=${AMI_DESCRIPTION}" \
 	-var "iam_instance_profile=${IAM_INSTANCE_PROFILE}" \
 	-var "instance_type=${INSTANCE_TYPE}" \
-	-var "source_ami=${AMI}" \
+	-var "source_ami=${PARENT_AMI}" \
 	-var "region=${REGION}" \
 	-var "subnet_id=${SUBNET_ID}" \
 	-var "vpc_id=${VPC_ID}" \
 	-var "security_group_id=${SECURITY_GROUP_ID}" \
 	-var "cloud-init-script=${INIT_SCRIPT}" \
-	ubuntu/ubuntu-dev.json | tee ubuntu-dev-${TODAY}.log
+	aws-bake.json | tee ${AMI_NAME}.log
 
 #
 # tag the newly created AMI with the parent's AMI ID
 # (we can use this later for inventory management)
 #
 
-tagAMI ${AMI_NAME} ${IMAGE_STREAM} ${AMI}
+echo tagAMI ${AMI_NAME} ${IMAGE_STREAM} ${PARENT_AMI}

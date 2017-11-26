@@ -1,0 +1,38 @@
+{
+	"variables" : {
+		"ovf_filename" : "",
+		"ssh_password" : "",
+		"vm_name" : ""
+	},
+
+	"builders" : [
+		{
+			"type" : "amazon-ebs",
+			"ami_name" : "{{user `ami_name`}}",
+			"ami_description" : "{{user `ami_description`}}",
+			"iam_instance_profile" : "{{user `iam_instance_profile`}}",
+			"region" : "{{user `region`}}",
+			"instance_type" : "{{user `instance_type`}}",
+			"source_ami" : "{{user `source_ami` }}",
+			"ssh_username" : "ubuntu",
+			"subnet_id" : "{{user `subnet_id`}}",
+			"vpc_id" : "{{user `vpc_id`}}",
+			"security_group_id" : "{{user `security_group_id`}}",
+			"tags" : {
+				"Name", "{{user `ami_name`}}",
+				"Artifact-Version" : "{{user `artifact_version`}}",
+				"Image_Stream" : "{{user `artifact_version`}}",
+				"Parent_AMI" : "{{user `source_ami`}}",
+				"git.commit" : "{{user `artifact_version`}}",
+				"git.origin" : "{{user `artifact_version`}}"
+			}
+		}
+	],
+
+	"provisioners" : [
+		{
+		"type" : "shell",
+		"script" : "{{user `cloud-init-script`}}"
+		}
+	]
+}
