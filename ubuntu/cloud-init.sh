@@ -3,6 +3,7 @@
 # hmmmm, need to set the hostname to something the AWS DNS server knows
 sudo hostname `hostname -s`.ec2.internal
 
+echo 'OS Release : ' `cat /etc/issue`
 echo 'Kernel Info: ' `uname -a`
 
 echo 'Initial Disk Summary'

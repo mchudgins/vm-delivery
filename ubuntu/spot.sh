@@ -119,11 +119,11 @@ echo instanceID ${instanceID}
 rm ${FILE}
 
 #tag the instance
-aws --region ${REGION} ec2 create-tags --resources ${instanceID} --tags Key=Name,Value="configServer"
+aws --region ${REGION} ec2 create-tags --resources ${instanceID} --tags Key=Name,Value="ubuntu"
 
 #display the instance's IP ADDR
 ipaddr=`aws --region ${REGION} ec2 describe-instances --instance-ids ${instanceID} | jq .Reservations[0].Instances[0].PublicIpAddress`
 echo Instance available at ${ipaddr}
 
 # update the DNS entry for this new instance of vault-seed-${REGION}.dstcorp.io
-upsertDNS "config-${REGION}.dstcorp.io." ${ipaddr} ${instanceID}
+#upsertDNS "config-${REGION}.dstcorp.io." ${ipaddr} ${instanceID}
