@@ -96,7 +96,6 @@ INIT_SCRIPT=$target
 
 if [[ -z "${VPC_ID}" ]]; then
     vpc=`findVPCWithTag ${REGION} Bakery`
-    echo VPC ${vpc}
     if [[ -z "${vpc}" || "${vpc}" == "null" ]]; then
         echo "Unable to find a Bakery VPC"
         exit 1
@@ -106,9 +105,7 @@ if [[ -z "${VPC_ID}" ]]; then
 fi
 
 if [[ -z "${SUBNET_ID}" ]]; then
-
     subnet=`findSubnetWithTag ${REGION} ${VPC_ID} Bakery`
-    echo Subnet ${subnet}
     if [[ -z "${subnet}" || "${subnet}" == "null" ]]; then
         echo "Unable to find a Bakery subnet"
         exit 2
@@ -127,7 +124,6 @@ if [[ -z "${AMI_DESCRIPTION}" ]]; then
     exit 4
 fi
 
-echo parent ${PARENT_AMI}
 if [[ -z "${PARENT_AMI}" ]]; then
     echo 'missing --parent <ami-id>'
     exit 4
@@ -169,9 +165,19 @@ packer build \
 	-var "git_origin=$(gitOriginURL)" \
 	aws-bake.json | tee ${IMAGE_STREAM}/${AMI_NAME}.log
 
+# create/update the ami file
+ami_id=`tail -1 ${IMAGE_STREAM}/${AMI_NAME}.log | sed -e 's/^.*: //'`
+if [[ -z "${ami_id}" || -z "`echo ${ami_id} | grep 'ami-'`" ]]; then
+    echo "Unable to find AMI ID"
+    exit 1
+fi
+
+echo ${ami_id} >${IMAGE_STREAM}.ami
+
 #
 # tag the newly created AMI with the parent's AMI ID
 # (we can use this later for inventory management)
 #
 
 #echo tagAMI ${AMI_NAME} ${IMAGE_STREAM} ${PARENT_AMI}
+
