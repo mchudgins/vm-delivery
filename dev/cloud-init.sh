@@ -23,11 +23,9 @@ sudo apt-get update -yq
 # see http://askubuntu.com/questions/146921/how-do-i-apt-get-y-dist-upgrade-without-a-grub-config-prompt
 sudo DEBIAN_FRONTEND=noninteractive apt-get -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" upgrade -yq
 sudo apt-get install -yq --no-install-recommends \
-  apt-transport-https awscli \
-  bash-completion build-essential ca-certificates curl e2fsprogs ethtool gcc htop jq \
-  linux-image-extra-virtual make nano \
-  net-tools openjdk-8-jdk-headless python software-properties-common \
-  silversearcher-ag tcpdump unzip
+  apt-transport-https build-essential gcc make \
+  openjdk-8-jdk-headless python software-properties-common \
+  silversearcher-ag
 
 # install AWS CLI/SDK
 #curl "https://s3.amazonaws.com/aws-cli/awscli-bundle.zip" -o "/tmp/awscli-bundle.zip"
@@ -47,6 +45,9 @@ sudo add-apt-repository \
    "deb [arch=amd64] https://download.docker.com/linux/ubuntu \
    $(lsb_release -cs) \
    stable"
+# bug with Ubuntu 17.01, see https://gist.github.com/levsthings/0a49bfe20b25eeadd61ff0e204f50088
+sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu zesty stable"
+
 sudo apt-get update
 sudo apt-get install -yq --no-install-recommends docker-ce
 
