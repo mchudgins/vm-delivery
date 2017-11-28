@@ -91,7 +91,6 @@ _EOF_
 #echo ${USERDATA} | base64 -d
 
 # create the updated json launch config in a temp file
-#    "InstanceInitiatedShutdownBehavior": "terminate",
 #    "EbsOptimized": true,
 FILE=`mktemp`
 cat <<EOF >${FILE}
@@ -100,6 +99,7 @@ cat <<EOF >${FILE}
     "KeyName": "${KEY_NAME}",
     "UserData": "${USERDATA}",
     "InstanceType": "${INSTANCE_TYPE}",
+    "InstanceInitiatedShutdownBehavior": "terminate",
     "IamInstanceProfile": {
         "Name": "ec2PackerInstanceRole"
     },
