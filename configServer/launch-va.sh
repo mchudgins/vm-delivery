@@ -83,7 +83,9 @@ echo "Launching ${IMAGE_ID}"
 $(cat <<-_EOF_ >/tmp/userdata
 #cloud-config
 runcmd:
- - echo "hello" >/tmp/cloud-init
+ - 'aws s3 cp s3://dstcorp/artifacts/node_exporter-0.15.1.linux-amd64.tar.gz ./node-ex.tar.gz
+ && tar xfz node-ex.tar.gz
+ && ./node_exporter-0.15.1.linux-amd64/node_exporter &'
  - docker run -d -e GIT_REPO_URL=https://github.com/mchudgins/config-props.git -p 80:8888 mchudgins/configserver:0.0.2-SNAPSHOT
 _EOF_
 )
