@@ -39,8 +39,8 @@ sudo update-ca-certificates
 
 # clean up
 sudo apt-get autoremove
-sudo apt-get clean
-sudo rm -r /var/lib/apt/lists/*
+#sudo apt-get clean
+#sudo rm -r /var/lib/apt/lists/*
 rm -rf /tmp/*
 
 echo 'Disk Summary after Update'

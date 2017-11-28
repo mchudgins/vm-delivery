@@ -15,13 +15,6 @@ echo 'Starting Package Installations'
 #echo "deb [arch=amd64] http://storage.googleapis.com/bazel-apt stable jdk1.8" | sudo tee /etc/apt/sources.list.d/bazel.list
 #curl https://bazel.build/bazel-release.pub.gpg | sudo apt-key add -
 
-#   update package info
-sudo apt-get update -yq
-
-# the grub package doesn't respect -y by itself, so we need a bunch of extra options,
-# or the provisioner will get stuck at an interactive prompt asking about Grub configuration
-# see http://askubuntu.com/questions/146921/how-do-i-apt-get-y-dist-upgrade-without-a-grub-config-prompt
-sudo DEBIAN_FRONTEND=noninteractive apt-get -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" upgrade -yq
 sudo apt-get install -yq --no-install-recommends \
   apt-transport-https build-essential gcc make \
   openjdk-8-jdk-headless python software-properties-common \
