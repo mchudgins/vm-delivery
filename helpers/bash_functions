@@ -142,6 +142,27 @@ function launchSpotInstance {
     echo ${instanceID}
 }
 
+# launch an On Demand instance
+function launchInstance {
+    REGION=$1
+    FILE=$2
+    USERDATA=$3
+
+    cmd="aws --region ${REGION} ec2 run-instances --count 1 --user-data file://${USERDATA} \
+            --cli-input-json file://${FILE}"
+    rc=`${cmd}`
+    if [[ $? != 0 ]]; then
+        echo $rc
+        exit 1
+    fi
+
+    instanceID=`echo ${rc} | jq .Instances[0].InstanceId | sed -e 's/"//g'`
+
+    echo ${rc} >/tmp/run.json
+    echo ${instanceID}
+}
+
+# update DNS entry
 function upsertDNS {
     name=$1
     ipaddr=$2
