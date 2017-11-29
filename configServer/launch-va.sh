@@ -53,6 +53,11 @@ while test $# -gt 0; do
             SUBNET=$1
             ;;
 
+        --image-stream)
+            shift
+            IMAGE_STREAM=$1
+            ;;
+
          *)
             break
             ;;

@@ -41,6 +41,32 @@ aws s3 cp s3://dstcorp/dst-root.crt /tmp
 sudo cp /tmp/dst-root.crt /usr/local/share/ca-certificates
 sudo update-ca-certificates
 
+# set up the prometheus metrics exporter for this vm
+aws s3 cp s3://dstcorp/artifacts/node_exporter-0.15.1.linux-amd64.tar.gz /tmp/node-ex.tar.gz \
+    && cd /tmp && tar xfz node-ex.tar.gz \
+    && sudo cp /tmp/node_exporter-0.15.1.linux-amd64/node_exporter /usr/local/bin \
+    && cd -
+
+cat <<"EOF" >/tmp/node-exporter.service
+[Unit]
+Description=node-exporter
+After=network.target auditd.service
+
+[Service]
+ExecStart=/usr/local/bin/node_exporter
+ExecReload=/bin/kill -HUP $MAINPID
+KillMode=process
+Restart=on-failure
+RestartPreventExitStatus=255
+Type=simple
+
+[Install]
+WantedBy=multi-user.target
+EOF
+sudo mv /tmp/node-exporter.service /etc/systemd/system/node-exporter.service
+sudo systemctl daemon-reload
+sudo systemctl enable node-exporter
+
 # clean up
 sudo apt-get autoremove
 #sudo apt-get clean

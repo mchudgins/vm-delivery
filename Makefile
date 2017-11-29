@@ -20,9 +20,9 @@ etcd.ami: ubuntu.ami aws-bake.json etcd/cloud-init.sh
 	bin/bake --parent $(shell cat ubuntu.ami) --image-stream etcd --artifact-version 3.2.10 \
 		--description 'etcd' etcd/cloud-init.sh
 
-origin-master.ami: ubuntu.ami aws-bake.json origin-master/cloud-init.sh
+master.ami: ubuntu.ami aws-bake.json master/cloud-init.sh
 	bin/bake --parent $(shell cat ubuntu.ami) --image-stream master --artifact-version 3.6.1 \
-		--description 'Origin Master based on Ubuntu 17.10' origin-master/cloud-init.sh
+		--description 'Origin Master based on Ubuntu 17.10' master/cloud-init.sh
 
 clean:
 	rm *.ami
