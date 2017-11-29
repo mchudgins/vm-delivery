@@ -32,6 +32,10 @@ sudo apt-get install -yq --no-install-recommends \
 sudo apt-get remove -yq unattended-upgrades
 sudo apt autoremove -yq
 
+# change the journald options to have only one log file
+# rather than one per user
+sudo sh -c 'echo "SplitMode=none" >>/etc/systemd/journald.conf'
+
 # DST Root CA
 aws s3 cp s3://dstcorp/dst-root.crt /tmp
 sudo cp /tmp/dst-root.crt /usr/local/share/ca-certificates
