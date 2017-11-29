@@ -1,3 +1,4 @@
 #!/usr/bin/env bash
 
-echo base.ami dev.ami origin-master.ami
+#echo ubuntu.ami dev.ami origin-master.ami
+echo ubuntu.ami dev.ami etcd.ami

@@ -1,52 +1,26 @@
 #! /bin/bash
 
-VAULT_ARTIFACT="s3://dstcorp/artifacts/vault-0.8.3.zip"
-ETCD_ARTIFACT="s3://dstcorp/artifacts/etcd-3.2.7-custom"
+ETCD_VERSION=v3.2.10
+ETCD_ARTIFACT="s3://dstcorp/artifacts/etcd-${ETCD_VERSION}-linux-amd64.tar.gz"
 
 # hmmmm, need to set the hostname to something the AWS DNS server knows
 sudo hostname `hostname -s`.ec2.internal
 
+echo 'OS Release : ' `cat /etc/issue`
+echo 'Kernel Info: ' `uname -a`
+
 echo 'Initial Disk Summary'
 df -H
-
-echo 'Starting Package Installations'
-
-#   update package info
-sudo apt-get update -yq
-
-# the grub package doesn't respect -y by itself, so we need a bunch of extra options,
-# or the provisioner will get stuck at an interactive prompt asking about Grub configuration
-# see http://askubuntu.com/questions/146921/how-do-i-apt-get-y-dist-upgrade-without-a-grub-config-prompt
-sudo DEBIAN_FRONTEND=noninteractive apt-get -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" upgrade -yq
-sudo apt-get install -yq --no-install-recommends \
-  apt-transport-https awscli \
-  bash-completion ca-certificates curl e2fsprogs ethtool htop jq \
-  linux-image-extra-virtual nano \
-  net-tools tcpdump unzip
-
-# stop unattended upgrades -- that's why we have baked images!
-sudo apt-get remove -yq unattended-upgrades
-sudo apt-get autoremove -yq
-
-# DST Root CA
-aws s3 cp s3://dstcorp/dst-root.crt /tmp
-sudo cp /tmp/dst-root.crt /usr/local/share/ca-certificates
-sudo update-ca-certificates
-
-# change the journald options to have only one log file
-# rather than one per user
-sudo sh -c 'echo "SplitMode=none" >>/etc/systemd/journald.conf'
 
 # create a non-privileged etcd user
 sudo adduser --system --home /var/lib/etcd --gecos 'etcd,,,' --disabled-password etcd
 
-# install & configure VAULT as a single (non-HA) instance using s3 as the backing storage
-aws s3 cp ${VAULT_ARTIFACT} /tmp/vault.zip \
-    && unzip /tmp/vault.zip \
-    && sudo mv vault /usr/local/bin \
-    && aws s3 cp ${ETCD_ARTIFACT} /tmp/etcd \
-    && chmod +x /tmp/etcd \
-    && sudo mv /tmp/etcd /usr/local/bin \
+# install & configure ETCD
+echo 'Starting etcd installation'
+aws s3 cp ${ETCD_ARTIFACT} /tmp/etcd.tar.gz \
+    && cd /tmp && tar xfz /tmp/etcd.tar.gz && cd - \
+    && chmod +x /tmp/etcd-${ETCD_VERSION}-linux-amd64/etcd* \
+    && sudo mv /tmp/etcd-${ETCD_VERSION}-linux-amd64/etcd* /usr/local/bin \
     && sudo mkdir -p /usr/local/etc/etcd \
     && sudo chown etcd /usr/local/etc/etcd \
     && sudo mkdir -p /var/lib/etcd \
@@ -130,10 +104,7 @@ chmod +x /tmp/etcd-start
 sudo cp /tmp/etcd-start /usr/local/bin/etcd-start
 
 # clean up
-sudo apt-get autoremove
-sudo apt-get clean
-sudo rm -r /var/lib/apt/lists/*
-rm -rf /tmp/*
+rm -r /tmp/*
 
 echo 'Disk Summary after Update'
 df -H

@@ -3,6 +3,9 @@
 # hmmmm, need to set the hostname to something the AWS DNS server knows
 sudo hostname `hostname -s`.ec2.internal
 
+echo 'OS Release : ' `cat /etc/issue`
+echo 'Kernel Info: ' `uname -a`
+
 echo 'Initial Disk Summary'
 df -H
 
@@ -12,19 +15,10 @@ echo 'Starting Package Installations'
 #echo "deb [arch=amd64] http://storage.googleapis.com/bazel-apt stable jdk1.8" | sudo tee /etc/apt/sources.list.d/bazel.list
 #curl https://bazel.build/bazel-release.pub.gpg | sudo apt-key add -
 
-#   update package info
-sudo apt-get update -yq
-
-# the grub package doesn't respect -y by itself, so we need a bunch of extra options,
-# or the provisioner will get stuck at an interactive prompt asking about Grub configuration
-# see http://askubuntu.com/questions/146921/how-do-i-apt-get-y-dist-upgrade-without-a-grub-config-prompt
-sudo DEBIAN_FRONTEND=noninteractive apt-get -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" upgrade -yq
 sudo apt-get install -yq --no-install-recommends \
-  apt-transport-https awscli \
-  bash-completion build-essential ca-certificates curl e2fsprogs ethtool gcc htop jq \
-  linux-image-extra-virtual make nano \
-  net-tools openjdk-8-jdk-headless python software-properties-common \
-  silversearcher-ag tcpdump unzip
+  apt-transport-https build-essential gcc make \
+  openjdk-8-jdk-headless python software-properties-common \
+  silversearcher-ag
 
 # install AWS CLI/SDK
 #curl "https://s3.amazonaws.com/aws-cli/awscli-bundle.zip" -o "/tmp/awscli-bundle.zip"
@@ -44,6 +38,9 @@ sudo add-apt-repository \
    "deb [arch=amd64] https://download.docker.com/linux/ubuntu \
    $(lsb_release -cs) \
    stable"
+# bug with Ubuntu 17.01, see https://gist.github.com/levsthings/0a49bfe20b25eeadd61ff0e204f50088
+sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu zesty stable"
+
 sudo apt-get update
 sudo apt-get install -yq --no-install-recommends docker-ce
 

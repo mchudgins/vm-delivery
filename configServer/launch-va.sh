@@ -5,7 +5,7 @@
 #
 
 REGION=us-east-1
-INSTANCE_TYPE=m3.medium
+INSTANCE_TYPE=t2.nano
 SPOT_PRICE=0.02
 KEY_NAME="kp201707"
 SUBNET="subnet-08849b7f"
@@ -57,6 +57,8 @@ while test $# -gt 0; do
             break
             ;;
     esac
+
+    shift
 done
 
 source ../helpers/bash_functions
@@ -66,20 +68,32 @@ IMAGE_ID=$(mostRecentAMI ${IMAGE_STREAM})
 echo "Launching ${IMAGE_ID}"
 
 # create the cloud-init user data
-USERDATA=$(cat <<-_EOF_ | base64 -w 0
-#! /usr/bin/env bash
-hostname ip-10-10-128-6.ec2.internal
-
-REGION=${REGION}
-
-docker run -d -e GIT_REPO_URL=https://github.com/mchudgins/config-props.git -p 80:8888 \
-    mchudgins/configserver:0.0.2-SNAPSHOT
+#USERDATA=$(cat <<-_EOF_ | base64 -w 0
+##! /usr/bin/env bash
+#hostname ip-10-10-128-6.ec2.internal
+#
+#REGION=${REGION}
+#
+#echo "hello" >/tmp/cloud-init
+#
+#docker run -d -e GIT_REPO_URL=https://github.com/mchudgins/config-props.git -p 80:8888 \
+#    mchudgins/configserver:0.0.2-SNAPSHOT
+#_EOF_
+#)
+$(cat <<-_EOF_ >/tmp/userdata
+#cloud-config
+runcmd:
+ - 'aws s3 cp s3://dstcorp/artifacts/node_exporter-0.15.1.linux-amd64.tar.gz ./node-ex.tar.gz
+ && tar xfz node-ex.tar.gz
+ && ./node_exporter-0.15.1.linux-amd64/node_exporter &'
+ - docker run -d -e GIT_REPO_URL=https://github.com/mchudgins/config-props.git -p 80:8888 mchudgins/configserver:0.0.2-SNAPSHOT
 _EOF_
 )
 
-echo ${USERDATA} | base64 -d
+#echo ${USERDATA} | base64 -d
 
 # create the updated json launch config in a temp file
+#    "EbsOptimized": true,
 FILE=`mktemp`
 cat <<EOF >${FILE}
 {
@@ -87,10 +101,10 @@ cat <<EOF >${FILE}
     "KeyName": "${KEY_NAME}",
     "UserData": "${USERDATA}",
     "InstanceType": "${INSTANCE_TYPE}",
+    "InstanceInitiatedShutdownBehavior": "terminate",
     "IamInstanceProfile": {
         "Name": "ec2PackerInstanceRole"
     },
-    "EbsOptimized": false,
     "Monitoring": {
         "Enabled": false
     },
@@ -109,8 +123,12 @@ EOF
 
 cat ${FILE}
 
+# launch an on demand instance
+instanceID=$(launchInstance ${REGION} ${FILE} /tmp/userdata)
+
 # launch the spot instance
-instanceID=$(launchSpotInstance ${REGION} ${SPOT_PRICE} ${FILE})
+#instanceID=$(launchSpotInstance ${REGION} ${SPOT_PRICE} ${FILE})
+
 if [[ $? != 0 ]]; then
     exit 1
 fi
