@@ -24,5 +24,9 @@ master.ami: ubuntu.ami aws-bake.json master/cloud-init.sh
 	bin/bake --parent $(shell cat ubuntu.ami) --image-stream master --artifact-version 3.6.1 \
 		--description 'Origin Master based on Ubuntu 17.10' master/cloud-init.sh
 
+node.ami: ubuntu.ami aws-bake.json node/cloud-init.sh
+	bin/bake --parent $(shell cat ubuntu.ami) --image-stream node --artifact-version 3.6.1 \
+   		--description 'Origin Node based on Ubuntu 17.10' node/cloud-init.sh
+
 clean:
 	rm *.ami
