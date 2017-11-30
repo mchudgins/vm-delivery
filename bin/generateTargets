@@ -1,4 +1,59 @@
 #!/usr/bin/env bash
 
 #echo ubuntu.ami dev.ami origin-master.ami
-echo ubuntu.ami dev.ami etcd.ami master.ami
+targets="ubuntu dev etcd master"
+
+function mostRecentAMI {
+    REGION="us-east-1"
+    IMAGE_STREAM=$1
+    FILE=$2
+
+    # retrieve the list of ami's owned by this account
+    IMAGES=`aws --region ${REGION} ec2 describe-images --owners self`
+
+    # now find the latest image matching <IMAGE_STREAM>-<date/time>
+    ORIGIN_DATE="0000-00-00T00:00:00.000Z"
+    MAX_DATE=${ORIGIN_DATE}
+    MAX_IMAGE_INDEX=-1
+
+    image_count=`echo ${IMAGES} | jq '.[] | length'`
+    for i in `seq 1 ${image_count}`; do
+      var=`expr $i - 1`
+      name=`echo ${IMAGES} | jq .Images[$var].Name`
+      tagLen=`echo ${IMAGES} | jq ".Images[$var].Tags | length"`
+      for j in `seq 1 ${tagLen}`; do
+        iter=`expr $j - 1`
+        tagName=`echo ${IMAGES} | jq .Images[$var].Tags[$iter].Key | sed -e 's/"//g'`
+        if [[ ${tagName} == "ImageStream" ]]; then
+            imageStream=`echo ${IMAGES} | jq .Images[$var].Tags[$iter].Value | sed -e 's/"//g'`
+            if [[ "${IMAGE_STREAM}" == ${imageStream} ]]; then
+              IMAGE_DATE=`echo ${IMAGES} | jq .Images[$var].CreationDate`
+              if [[ "${MAX_DATE}" < "${IMAGE_DATE}" ]]; then
+                MAX_DATE=${IMAGE_DATE}
+                MAX_IMAGE_INDEX=${var}
+              fi
+            fi
+        fi
+      done
+    done
+
+    if [[ ${MAX_IMAGE_INDEX} -eq -1 ]]; then
+        echo "not found"
+        return 1
+    else
+        IMAGE_ID=`echo ${IMAGES} | jq .Images[${MAX_IMAGE_INDEX}].ImageId`
+#        echo ${IMAGE_ID} | sed -e 's/\"//g'
+        echo ${IMAGE_ID} | sed -e 's/"//g' >${FILE}
+#        echo Date: ${IMAGE_DATE}
+        touch --date=`echo ${IMAGE_DATE} | sed 's/"//g'` ${FILE}
+        return 0
+    fi
+}
+
+for image_stream in ${targets};
+    do
+    mostRecentAMI ${image_stream} ${image_stream}.ami
+    output="${output} ${image_stream}.ami"
+    done
+
+echo ${output}
