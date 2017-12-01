@@ -54,16 +54,24 @@ Deploy the appropriate cluster initiation job (pod).
 The initiation pod is likely to vary depending upon the cluster's use
 as either a development cluster or a production controlled cluster.
 
-General outline of cluster initiation job:
+    General outline of cluster initiation job:
+
     1. Modify default project template to deploy (only) to nodes in the private subnet.
+    
     2. Launch one (or more) instances in the public subnet.  This means
     the job will need a k8s secret with sufficient AWS credentials to launch nodes.
     The k8s secret should be sourced from Vault.
+    
     3. Deploy, explicitly, to the public node(s), HA proxy.
+    
     4. Deploy, if desired, the Openshift Registry.
+    
     5. Deploy any cluster hygiene pods (lease expiration, scale-out/scale-in, etc)
+    
     6. Other administrative tasks, TBD.
+    
     7. Deploy DST Application Templates.
+    
     8. Deploy Infrastructure Services, TBD. Examples would be Openshift's metrics service,
     Kafka, Cassandra, Zipkin, Hystrix, Turbine, Prometheus,
     Vault, ConfigServer, etc. 
