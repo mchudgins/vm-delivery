@@ -9,50 +9,34 @@ ORIGIN_ARTIFACT="s3://dstcorp/artifacts/origin-${VERSION}.tar.gz"
 NODENAME=`hostname -s`
 sudo hostname ${NODENAME}.ec2.internal
 
+echo 'OS Release : ' `cat /etc/issue`
+echo 'Kernel Info: ' `uname -a`
+
 echo 'Initial Disk Summary'
 df -H
 
 echo 'Starting Package Installations'
 
-#   update package info
-sudo apt-get update -yq
-
-# the grub package doesn't respect -y by itself, so we need a bunch of extra options,
-# or the provisioner will get stuck at an interactive prompt asking about Grub configuration
-# see http://askubuntu.com/questions/146921/how-do-i-apt-get-y-dist-upgrade-without-a-grub-config-prompt
-sudo DEBIAN_FRONTEND=noninteractive apt-get -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" upgrade -yq
 # install dependencies of Openshift + curl + tcpdump and nano for troubleshooting
-sudo apt-get install -yq --no-install-recommends \
-  apt-transport-https awscli \
-  bash-completion ca-certificates curl e2fsprogs ethtool htop jq \
-  linux-image-extra-virtual nano \
-  net-tools openvswitch-switch tcpdump unzip
-
-# stop unattended upgrades -- that's why we have baked images!
-sudo apt-get remove -yq unattended-upgrades
-sudo apt-get autoremove -yq
+sudo DEBIAN_FRONTEND=noninteractive apt-get -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" \
+    install -yq --no-install-recommends openvswitch-switch
 
 # docker
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+# docker-ce broken with ubuntu 17.10, see https://gist.github.com/levsthings/0a49bfe20b25eeadd61ff0e204f50088
+#
+#sudo add-apt-repository \
+#   "deb [arch=amd64] https://download.docker.com/linux/ubuntu \
+#   $(lsb_release -cs) \
+#   stable"
 sudo add-apt-repository \
-   "deb [arch=amd64] https://download.docker.com/linux/ubuntu \
-   $(lsb_release -cs) \
-   stable"
+   "deb [arch=amd64] https://download.docker.com/linux/ubuntu zesty stable"
 sudo apt-get update
 sudo apt-get install -yq --no-install-recommends docker-ce
 sudo sed -i 's|ExecStart.*|ExecStart=/usr/bin/dockerd -H fd:// --insecure-registry=172.30.0.0/16 --exec-opt native.cgroupdriver=systemd|g' \
     /lib/systemd/system/docker.service
 sudo systemctl daemon-reload
 sudo systemctl enable docker
-
-# DST Root CA
-aws s3 cp s3://dstcorp/dst-root.crt /tmp
-sudo cp /tmp/dst-root.crt /usr/local/share/ca-certificates
-sudo update-ca-certificates
-
-# change the journald options to have only one log file
-# rather than one per user
-sudo sh -c 'echo "SplitMode=none" >>/etc/systemd/journald.conf'
 
 # create a non-privileged origin user
 sudo adduser --system --home /var/lib/origin --gecos 'Openshift Origin,,,' --disabled-password openshift
@@ -140,9 +124,9 @@ chmod +x /tmp/openshift-node-start
 sudo cp /tmp/openshift-node-start /usr/local/bin/openshift-node-start
 
 # clean up
-sudo apt-get autoremove
-sudo apt-get clean
-sudo rm -r /var/lib/apt/lists/*
+#sudo apt-get autoremove
+#sudo apt-get clean
+#sudo rm -r /var/lib/apt/lists/*
 rm -rf /tmp/*
 
 echo 'Disk Summary after Update'
