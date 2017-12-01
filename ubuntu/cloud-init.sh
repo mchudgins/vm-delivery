@@ -24,7 +24,7 @@ sudo apt-get update -yq
 sudo DEBIAN_FRONTEND=noninteractive apt-get -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" upgrade -yq
 sudo apt-get install -yq --no-install-recommends \
   apt-transport-https awscli \
-  bash-completion ca-certificates curl e2fsprogs ethtool htop jq \
+  bash-completion ca-certificates chrony curl e2fsprogs ethtool htop jq \
   linux-image-extra-virtual nano \
   net-tools tcpdump unzip
 
@@ -40,6 +40,11 @@ sudo sh -c 'echo "SplitMode=none" >>/etc/systemd/journald.conf'
 aws s3 cp s3://dstcorp/dst-root.crt /tmp
 sudo cp /tmp/dst-root.crt /usr/local/share/ca-certificates
 sudo update-ca-certificates
+
+# configure NTP/CHRONY to use the AWS endpoint  169.254.169.123 (see https://aws.amazon.com/blogs/aws/keeping-time-with-amazon-time-sync-service/)
+sudo sed -i -e 's/pool/#pool/g' /etc/chrony/chrony.conf
+sudo bash -c '"(see https://aws.amazon.com/blogs/aws/keeping-time-with-amazon-time-sync-service/)" >>/etc/chrony/chrony.conf'
+sudo bash -c 'echo "server 169.254.169.123 prefer iburst" >>/etc/chrony/chrony.conf'
 
 # set up the prometheus metrics exporter for this vm
 aws s3 cp s3://dstcorp/artifacts/node_exporter-0.15.1.linux-amd64.tar.gz /tmp/node-ex.tar.gz \
