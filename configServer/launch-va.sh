@@ -12,6 +12,7 @@ SUBNET="subnet-08849b7f"
 IMAGE_STREAM=dev
 CLUSTER_NAME=vpc0
 NODE_IP="10.10.128.6"
+IAM_INSTANCE_PROFILE=ec2PackerInstanceRole
 
 #
 # flags from command line may supersede defaults
@@ -56,6 +57,16 @@ while test $# -gt 0; do
         --image-stream)
             shift
             IMAGE_STREAM=$1
+            ;;
+
+        --iam-profile)
+            shift
+            IAM_INSTANCE_PROFILE=$1
+            ;;
+
+        --node-ip)
+            shift
+            NODE_IP=$1
             ;;
 
          *)
@@ -108,7 +119,7 @@ cat <<EOF >${FILE}
     "InstanceType": "${INSTANCE_TYPE}",
     "InstanceInitiatedShutdownBehavior": "terminate",
     "IamInstanceProfile": {
-        "Name": "ec2PackerInstanceRole"
+        "Name": "${IAM_INSTANCE_PROFILE}"
     },
     "Monitoring": {
         "Enabled": false
