@@ -1,12 +1,5 @@
 #! /bin/bash
 
-# check if a spot price was provided
-if [[ -z "${SPOT_PRICE}" ]]; then
-    BID_PRICE=0.0275
-else
-    BID_PRICE=${SPOT_PRICE}
-fi
-
 #
 # configuration
 #
@@ -19,6 +12,61 @@ IMAGE_STREAM=master
 CLUSTER_NAME=vpc0
 
 source ../helpers/bash_functions
+
+#
+# flags from command line may supersede defaults
+#
+
+while test $# -gt 0; do
+    case "$1" in
+        --cluster)
+            shift
+            CLUSTER_NAME=$1
+            ;;
+
+        -h|--help)
+            echo `basename $0` '--region (us-east-1|us-west-2)'
+            ;;
+
+        --instance-type)
+            shift
+            INSTANCE_TYPE=$1
+            ;;
+
+        --key-name)
+            shift
+            KEY_NAME=$1
+            ;;
+
+        --region)
+            shift
+            REGION=$1
+            ;;
+
+        --spot-price)
+            shift
+            SPOT_PRICE=$1
+            ;;
+
+        --subnet)
+            shift
+            SUBNET=$1
+            ;;
+
+         *)
+            break
+            ;;
+
+    esac
+    shift
+done
+
+# check if a spot price was provided
+if [[ -z "${SPOT_PRICE}" ]]; then
+    BID_PRICE=0.0275
+else
+    BID_PRICE=${SPOT_PRICE}
+fi
 
 # retrieve the list of ami's owned by this account
 IMAGE_ID=$(mostRecentAMI ${IMAGE_STREAM})
@@ -46,6 +94,7 @@ _EOF_
 echo ${USERDATA} | base64 -d
 
 # create the updated json launch config in a temp file
+EBS_OPTIMIZED=`isEBSOptimizable ${INSTANCE_TYPE}`
 FILE=`mktemp`
 cat <<EOF >${FILE}
 {
@@ -56,7 +105,7 @@ cat <<EOF >${FILE}
     "IamInstanceProfile": {
         "Name": "oso-master"
     },
-    "EbsOptimized": true,
+    "EbsOptimized": ${EBS_OPTIMIZED},
     "Monitoring": {
         "Enabled": false
     },

@@ -6,7 +6,7 @@
 
 REGION=us-east-1
 INSTANCE_TYPE=t2.nano
-SPOT_PRICE=0.02
+SPOT_PRICE=0
 KEY_NAME="kp201707"
 SUBNET="subnet-08849b7f"
 IMAGE_STREAM=dev
@@ -139,11 +139,13 @@ EOF
 
 cat ${FILE}
 
+if [[ "${SPOT_PRICE}" == "0" ]]; then
 # launch an on demand instance
-instanceID=$(launchInstance ${REGION} ${FILE} /tmp/userdata)
-
+    instanceID=$(launchInstance ${REGION} ${FILE} /tmp/userdata)
+else
 # launch the spot instance
-#instanceID=$(launchSpotInstance ${REGION} ${SPOT_PRICE} ${FILE})
+    instanceID=$(launchSpotInstance ${REGION} ${SPOT_PRICE} ${FILE})
+fi
 
 if [[ $? != 0 ]]; then
     exit 1
