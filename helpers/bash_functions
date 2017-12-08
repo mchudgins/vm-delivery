@@ -33,6 +33,34 @@ function gitOriginURL {
     echo ${origin}
 }
 
+# some instance types are EBS "Optimizable"
+function isEBSOptimizable {
+    instance_type=$1
+
+    result=false
+
+    IFS="." read -r -a el <<< "${instance_type}"
+    case "${el[0]}" in
+        m4)
+            result=true
+            ;;
+
+        m5)
+            result=true
+            ;;
+
+        r4)
+            result=true
+            ;;
+
+        *)
+            ;;
+    esac
+
+    echo ${result}
+}
+
+
 # tag an AMI (and the underlying EBS snapshot) with important data
 function tagAMI {
     AMI_NAME=$1

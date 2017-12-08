@@ -55,7 +55,9 @@ while test $# -gt 0; do
          *)
             break
             ;;
+
     esac
+    shift
 done
 
 # check if a spot price was provided
@@ -109,6 +111,7 @@ _EOF_
 echo ${USERDATA} | base64 -d
 
 # create the updated json launch config in a temp file
+EBS_OPTIMIZED=`isEBSOptimizable ${INSTANCE_TYPE}`
 FILE=`mktemp`
 cat <<EOF >${FILE}
 {
@@ -119,7 +122,7 @@ cat <<EOF >${FILE}
     "IamInstanceProfile": {
         "Name": "ec2PackerInstanceRole"
     },
-    "EbsOptimized": true,
+    "EbsOptimized": ${EBS_OPTIMIZED},
     "Monitoring": {
         "Enabled": false
     },
