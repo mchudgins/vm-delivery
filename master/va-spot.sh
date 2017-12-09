@@ -152,6 +152,7 @@ id >/tmp/id.uid
 date > /tmp/cloud-final
 echo NODE_NAME=master-0 > /tmp/master-config
 echo CLUSTER_NAME=vpc0 >> /tmp/master-config
+echo CERT_NAME="dev-dstcorp-io" >> /tmp/master-config
 echo "OPENSHIFT_CONFIG=http://10.10.128.6/vpc0/default/vpc0/openshift/master/master-config.yaml" >> /tmp/master-config
 echo "OPENSHIFT_HTPASSWD=http://10.10.128.6/vpc0/default/vpc0/openshift/htpasswd"                >> /tmp/master-config
 
