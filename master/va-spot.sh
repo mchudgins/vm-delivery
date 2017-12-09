@@ -1,12 +1,5 @@
 #! /bin/bash
 
-# check if a spot price was provided
-if [[ -z "${SPOT_PRICE}" ]]; then
-    BID_PRICE=0.0275
-else
-    BID_PRICE=${SPOT_PRICE}
-fi
-
 #
 # configuration
 #
@@ -17,6 +10,76 @@ KEY_NAME="kp201707"
 SUBNET="subnet-08849b7f"
 IMAGE_STREAM=master
 CLUSTER_NAME=vpc0
+
+#
+# flags from command line may supersede defaults
+#
+
+while test $# -gt 0; do
+    case "$1" in
+        --cluster)
+            shift
+            CLUSTER_NAME=$1
+            ;;
+
+        -h|--help)
+            echo `basename $0` '--region (us-east-1|us-west-2)'
+            ;;
+
+        --instance-type)
+            shift
+            INSTANCE_TYPE=$1
+            ;;
+
+        --key-name)
+            shift
+            KEY_NAME=$1
+            ;;
+
+        --region)
+            shift
+            REGION=$1
+            ;;
+
+        --spot-price)
+            shift
+            SPOT_PRICE=$1
+            ;;
+
+        --subnet)
+            shift
+            SUBNET=$1
+            ;;
+
+        --image-stream)
+            shift
+            IMAGE_STREAM=$1
+            ;;
+
+        --iam-profile)
+            shift
+            IAM_INSTANCE_PROFILE=$1
+            ;;
+
+        --node-ip)
+            shift
+            NODE_IP=$1
+            ;;
+
+         *)
+            break
+            ;;
+    esac
+
+    shift
+done
+
+# check if a spot price was provided
+if [[ -z "${SPOT_PRICE}" ]]; then
+    BID_PRICE=0.0275
+else
+    BID_PRICE=${SPOT_PRICE}
+fi
 
 source ../helpers/bash_functions
 
@@ -46,6 +109,7 @@ _EOF_
 echo ${USERDATA} | base64 -d
 
 # create the updated json launch config in a temp file
+EBS_OPTIMIZED=`isEBSOptimizable ${INSTANCE_TYPE}`
 FILE=`mktemp`
 cat <<EOF >${FILE}
 {
@@ -56,7 +120,7 @@ cat <<EOF >${FILE}
     "IamInstanceProfile": {
         "Name": "oso-master"
     },
-    "EbsOptimized": true,
+    "EbsOptimized": ${EBS_OPTIMIZED},
     "Monitoring": {
         "Enabled": false
     },
@@ -93,4 +157,7 @@ aws --region ${REGION} ec2 create-tags --resources ${instanceID} \
 #display the instance's IP ADDR
 ipaddr=`aws --region ${REGION} ec2 describe-instances --instance-ids ${instanceID} | jq .Reservations[0].Instances[0].PublicIpAddress`
 echo Instance available at ${ipaddr}
+
+# update the DNS entry for this new instance of vault-seed-${REGION}.dstcorp.io
+upsertDNS "dev.dstcorp.io." ${ipaddr} ${instanceID}
 
