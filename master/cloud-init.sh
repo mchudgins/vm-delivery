@@ -104,6 +104,11 @@ fi
 fetchFile ${OPENSHIFT_CONFIG} ${CONFIG_DIR}/master/master-config.yaml
 fetchFile ${OPENSHIFT_HTPASSWD} ${CONFIG_DIR}/htpasswd
 
+aws s3 cp s3://dstcorp/${CLUSTER_NAME}/${CERT_NAME}.crt ${CONFIG_DIR}
+aws s3 cp s3://dstcorp/${CLUSTER_NAME}/${CERT_NAME}.key ${CONFIG_DIR}
+chown openshift ${CONFIG_DIR}/${CERT_NAME}.*
+chmod 0400 ${CONFIG_DIR}/${CERT_NAME}.key
+
 OPTS="--config ${CONFIG_DIR}/master/master-config.yaml"
 
 exec /usr/local/bin/openshift start master ${OPTS}
