@@ -1,0 +1,87 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: 'Provides networking configuration for an Openshift alpha VPC with NACL rules (qs-1nb14cqcl).'
+Metadata:
+    AWS::CloudFormation::Interface:
+        ParameterGroups:
+          - Label:
+                default: VPC Configuration
+            Parameters:
+              - pProductionVPCName
+              - pProductionCIDR
+              - pVPCTenancy
+        ParameterLabels:
+            pProductionVPCName:
+                default: Name of VPC
+            pProductionCIDR:
+                default: VPC CIDR block
+Parameters:
+    pProductionVPCName:
+        Description: Production VPC Name
+        Type: String
+        Default: o7t-alpha
+    pProductionCIDR:
+        Description: CIDR block for Production VPC
+        Type: String
+        Default: 10.250.0.0/16
+    pVPCTenancy:
+        Description: Instance tenancy behavior for this VPC
+        Type: String
+        Default: default
+        AllowedValues:
+          - default
+    pEnvironment:
+        Description: Environment (alpha, CI/CD, or development)
+        Type: String
+        Default: alpha
+        AllowedValues:
+          - alpha
+          - CI/CD
+          - development
+
+Resources:
+  rVPCProduction:
+    Type: AWS::EC2::VPC
+    Properties:
+        CidrBlock: !Ref pProductionCIDR
+        InstanceTenancy: !Ref pVPCTenancy
+        EnableDnsSupport: true
+        EnableDnsHostnames: true
+        Tags:
+          - Key: Name
+            Value: !Ref pProductionVPCName
+          - Key: Environment
+            Value: !Ref pEnvironment
+          - Key: StackName
+            Value: !Ref AWS::StackName
+  rIGWProd:
+      Type: AWS::EC2::InternetGateway
+      Properties:
+          Tags:
+            - Key: Name
+              Value: !Ref pProductionVPCName
+            - Key: Environment
+              Value: !Ref pEnvironment
+  rRouteProdIGW:
+      Type: AWS::EC2::Route
+      DependsOn: rGWAttachmentProdIGW
+      Properties:
+          RouteTableId: !Ref rRouteTableMain
+          GatewayId: !Ref rIGWProd
+          DestinationCidrBlock: 0.0.0.0/0
+  rRouteTableMain:
+      Type: AWS::EC2::RouteTable
+      Properties:
+          VpcId: !Ref rVPCProduction
+          Tags:
+            - Key: Name
+              Value: Production DMZ Route
+  rGWAttachmentProdIGW:
+      Type: AWS::EC2::VPCGatewayAttachment
+      DependsOn: rIGWProd
+      Properties:
+          VpcId: !Ref rVPCProduction
+          InternetGatewayId: !Ref rIGWProd
+
+Outputs:
+    rVPCProduction:
+        Value: !Ref rVPCProduction
