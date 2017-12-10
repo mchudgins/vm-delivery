@@ -39,20 +39,41 @@ Parameters:
           - development
 
 Resources:
+  rDHCPOptions:
+    Type: AWS::EC2::DHCPOptions
+    Properties:
+      DomainName: dst.cloud
+      DomainNameServers:
+      - AmazonProvidedDNS
+      Tags:
+      - Key: Name
+        Value: !Ref pProductionVPCName
+      - Key: StackName
+        Value: !Ref AWS::StackName
+
   rVPCProduction:
     Type: AWS::EC2::VPC
     Properties:
-        CidrBlock: !Ref pProductionCIDR
-        InstanceTenancy: !Ref pVPCTenancy
-        EnableDnsSupport: true
-        EnableDnsHostnames: true
-        Tags:
-          - Key: Name
-            Value: !Ref pProductionVPCName
-          - Key: Environment
-            Value: !Ref pEnvironment
-          - Key: StackName
-            Value: !Ref AWS::StackName
+      CidrBlock: !Ref pProductionCIDR
+      InstanceTenancy: !Ref pVPCTenancy
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+      - Key: Name
+        Value: !Ref pProductionVPCName
+      - Key: Environment
+        Value: !Ref pEnvironment
+      - Key: StackName
+        Value: !Ref AWS::StackName
+
+  rVPCDHCPOptionsAssociation:
+    Type: AWS::EC2::VPCDHCPOptionsAssociation
+    Properties:
+      VpcId:
+        Ref: rVPCProduction
+      DhcpOptionsId:
+        Ref: rDHCPOptions
+
   rIGWProd:
       Type: AWS::EC2::InternetGateway
       Properties:
@@ -74,7 +95,7 @@ Resources:
           VpcId: !Ref rVPCProduction
           Tags:
             - Key: Name
-              Value: Production DMZ Route
+              Value: Public Route
   rGWAttachmentProdIGW:
       Type: AWS::EC2::VPCGatewayAttachment
       DependsOn: rIGWProd
@@ -83,5 +104,7 @@ Resources:
           InternetGatewayId: !Ref rIGWProd
 
 Outputs:
-    rVPCProduction:
+    rVPC:
         Value: !Ref rVPCProduction
+        Export:
+          Name: !Sub ${AWS::StackName}-vpcid
