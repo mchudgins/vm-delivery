@@ -1,0 +1,103 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: 'Provides subnet configuration for an Openshift alpha environment with NACL rules (qs-1nb14cqcl).'
+Metadata:
+    AWS::CloudFormation::Interface:
+        ParameterGroups:
+          - Label:
+                default: Subnet Configuration
+            Parameters:
+              - pVPC
+              - pClusterName
+              - pPublicCIDR
+              - pPrivateCIDR
+              - pMgmtCIDR
+              - pAZ
+        ParameterLabels:
+            pVPC:
+                default: VPC
+            pClusterName:
+                default: Cluster Name
+            pPublicCIDR:
+                default: Public Subnet CIDR
+            pPrivateCIDR:
+                default: Private Subnet CIDR
+            pMgmtCIDR:
+                default: Management Subnet CIDR
+            pAZ:
+                default: Availability Zone
+
+Parameters:
+    pVPC:
+        Description: VPC
+        Type: AWS::EC2::VPC::Id
+    pClusterName:
+        Description: (a-z[a-z|0-9]*)
+        Type: String
+        Default: (your initials)
+    pPublicCIDR:
+        Description: CIDR block for Public Subnet
+        Type: String
+        Default: 10.250.0.0/24
+    pPrivateCIDR:
+        Description: CIDR block for Private Subnet
+        Type: String
+        Default: 10.250.1.0/24
+    pMgmtCIDR:
+        Description: CIDR block for Mgmt Subnet
+        Type: String
+        Default: 10.250.2.0/24
+    pAZ:
+        Description: Availability Zone
+        Type: AWS::EC2::AvailabilityZone::Name
+
+Resources:
+  rPublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+        AvailabilityZone: !Ref pAZ
+        CidrBlock: !Ref pPublicCIDR
+        MapPublicIpOnLaunch: true
+        Tags:
+          - Key: Name
+            Value: !Sub ${pClusterName}-public
+          - Key: StackName
+            Value: !Ref AWS::StackName
+          - Key: Cluster
+            Value: !Ref pClusterName
+        VpcId: !Ref pVPC
+
+  rPrivateSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+        AvailabilityZone: !Ref pAZ
+        CidrBlock: !Ref pPrivateCIDR
+        MapPublicIpOnLaunch: false
+        Tags:
+          - Key: Name
+            Value: !Sub ${pClusterName}-private
+          - Key: StackName
+            Value: !Ref AWS::StackName
+          - Key: Cluster
+            Value: !Ref pClusterName
+        VpcId: !Ref pVPC
+
+  rMgmtSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+        AvailabilityZone: !Ref pAZ
+        CidrBlock: !Ref pMgmtCIDR
+        MapPublicIpOnLaunch: false
+        Tags:
+          - Key: Name
+            Value: !Sub ${pClusterName}-private
+          - Key: StackName
+            Value: !Ref AWS::StackName
+          - Key: Cluster
+            Value: !Ref pClusterName
+        VpcId: !Ref pVPC
+
+Outputs:
+    rPublicSubnet:
+        Value: !Ref rPublicSubnet
+        Export:
+          Name: !Sub ${AWS::StackName}-public-subnet
