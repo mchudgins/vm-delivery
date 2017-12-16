@@ -292,6 +292,19 @@ Resources:
         - Key: master.groupName
           Value: !Ref rMasterSG
 
+  # an Egress rule for the rMasterSG to permit the master to talk to Nodes
+  rMasterToNodeEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    DependsOn:
+    - rMasterSG
+    - rNodeSG
+    Properties:
+      GroupId: !Ref rMasterSG
+      IpProtocol: tcp
+      FromPort: 10250
+      ToPort: 10250
+      DestinationSecurityGroupId: !Ref rNodeSG
+
   rUdpDns53Ingress:
     Type: AWS::EC2::SecurityGroupIngress
     DependsOn:
@@ -359,6 +372,39 @@ Resources:
       FromPort: 4789
       ToPort: 4789
       DestinationSecurityGroupId: !Ref rNodeSG
+
+  rHAProxySG:
+    Type: AWS::EC2::SecurityGroup
+    DependsOn:
+    - rVPC
+    - rNodeSG
+    Properties:
+      GroupName: !Sub ${pVPCName}-haproxy
+      GroupDescription: HA Proxy Ingress
+      VpcId: !Ref rVPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: 170.40.0.0/16
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 170.40.0.0/16
+      - IpProtocol: tcp
+        FromPort: 1936
+        ToPort: 1936
+        SourceSecurityGroupId: !Ref rNodeSG
+      SecurityGroupEgress: # disable the default egress to 0.0.0.0/0
+      - CidrIp: 127.0.0.1/16
+        IpProtocol: "-1"
+      Tags:
+        - Key: Name
+          Value: !Sub ${pVPCName}-haproxy
+        - Key: StackName
+          Value: !Ref AWS::StackName
+        - Key: VPC
+          Value: !Ref pVPCName
 
   rPublicSSHSG:
     Type: AWS::EC2::SecurityGroup
