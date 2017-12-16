@@ -175,7 +175,9 @@ Resources:
 
   rNodeSG:
     Type: AWS::EC2::SecurityGroup
-    DependsOn: rMasterSG
+    DependsOn:
+    - rMasterSG
+    - rEtcdSG
     Properties:
       GroupName: !Sub ${pVPCName}-node
       GroupDescription: Openshift node access
@@ -206,6 +208,14 @@ Resources:
         FromPort: 8053
         ToPort: 8053
         DestinationSecurityGroupId: !Ref rMasterSG
+      - IpProtocol: tcp
+        FromPort: 9100
+        ToPort: 9100
+        DestinationSecurityGroupId: !Ref rMasterSG
+      - IpProtocol: tcp
+        FromPort: 9100
+        ToPort: 9100
+        DestinationSecurityGroupId: !Ref rEtcdSG
       Tags:
         - Key: Name
           Value: !Sub ${pVPCName}-node
@@ -217,6 +227,52 @@ Resources:
           Value: !GetAtt rMasterSG.GroupId
         - Key: master.groupName
           Value: !Ref rMasterSG
+
+  rMasterPromIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    DependsOn:
+    - rMasterSG
+    - rNodeSG
+    Properties:
+      GroupId: !Ref rMasterSG
+      IpProtocol: tcp
+      FromPort: 9100
+      ToPort: 9100
+      SourceSecurityGroupId: !Ref rNodeSG
+
+  rEtcdPromIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    DependsOn:
+    - rEtcdSG
+    - rNodeSG
+    Properties:
+      GroupId: !Ref rEtcdSG
+      IpProtocol: tcp
+      FromPort: 9100
+      ToPort: 9100
+      SourceSecurityGroupId: !Ref rNodeSG
+
+  rNodePromIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    DependsOn:
+    - rNodeSG
+    Properties:
+      GroupId: !Ref rNodeSG
+      IpProtocol: tcp
+      FromPort: 9100
+      ToPort: 9100
+      SourceSecurityGroupId: !Ref rNodeSG
+
+  rNodePromEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    DependsOn:
+    - rNodeSG
+    Properties:
+      GroupId: !Ref rNodeSG
+      IpProtocol: tcp
+      FromPort: 9100
+      ToPort: 9100
+      DestinationSecurityGroupId: !Ref rNodeSG
 
   # an Egress rule for the rMasterSG to permit the master to talk to Nodes
   rMasterToNodeEgress:
@@ -322,8 +378,10 @@ Resources:
         ToPort: 1936
         SourceSecurityGroupId: !Ref rNodeSG
       SecurityGroupEgress: # disable the default egress to 0.0.0.0/0
-      - CidrIp: 127.0.0.1/16
-        IpProtocol: "-1"
+      - IpProtocol: udp
+        FromPort: 4789
+        ToPort: 4789
+        DestinationSecurityGroup: !Ref rNodeSG
       Tags:
         - Key: Name
           Value: !Sub ${pVPCName}-haproxy
