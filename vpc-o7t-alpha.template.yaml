@@ -86,13 +86,14 @@ Resources:
             - Key: Environment
               Value: !Ref pEnvironment
 
-  rRouteProdIGW:
-      Type: AWS::EC2::Route
-      DependsOn: rGWAttachmentProdIGW
+  rGWAttachmentProdIGW:
+      Type: AWS::EC2::VPCGatewayAttachment
+      DependsOn:
+      - rIGWProd
+      - rVPC
       Properties:
-          RouteTableId: !Ref rRouteTableMain
-          GatewayId: !Ref rIGWProd
-          DestinationCidrBlock: 0.0.0.0/0
+          VpcId: !Ref rVPC
+          InternetGatewayId: !Ref rIGWProd
 
   rRouteTableMain:
       Type: AWS::EC2::RouteTable
@@ -103,12 +104,62 @@ Resources:
             - Key: Name
               Value: !Sub ${pVPCName}-public
 
-  rGWAttachmentProdIGW:
-      Type: AWS::EC2::VPCGatewayAttachment
-      DependsOn: rIGWProd
+  rRouteProdIGW:
+      Type: AWS::EC2::Route
+      DependsOn:
+      - rGWAttachmentProdIGW
+      - rRouteTableMain
+      Properties:
+          RouteTableId: !Ref rRouteTableMain
+          GatewayId: !Ref rIGWProd
+          DestinationCidrBlock: 0.0.0.0/0
+
+  rRouteTablePrivate:
+      Type: AWS::EC2::RouteTable
+      DependsOn: rVPC
       Properties:
           VpcId: !Ref rVPC
-          InternetGatewayId: !Ref rIGWProd
+          Tags:
+            - Key: Name
+              Value: !Sub ${pVPCName}-private
+
+#
+# allow access to AWS endpoints like S3 and EC2
+# from within all subnets
+#
+
+  rVPCS3Endpoint:
+    Type: "AWS::EC2::VPCEndpoint"
+    DependsOn:
+    - rVPC
+    - rRouteTableMain
+    - rRouteTablePrivate
+    Properties:
+      RouteTableIds:
+        - !Ref rRouteTableMain
+        - !Ref rRouteTablePrivate
+      ServiceName:
+        !Sub "com.amazonaws.${AWS::Region}.s3"
+      VpcId: !Ref rVPC
+
+  # this doesn't work in Cloudformation, ec2 is an "interface" and requires a "PrivateLink"
+#  rVPCEc2Endpoint:
+#    Type: "AWS::EC2::VPCEndpoint"
+#    DependsOn:
+#    - rVPC
+#    - rRouteTableMain
+#    - rRouteTablePrivate
+#    Properties:
+#      RouteTableIds:
+#        - !Ref rRouteTableMain
+#        - !Ref rRouteTablePrivate
+#      ServiceName:
+#        !Sub "com.amazonaws.${AWS::Region}.ec2"
+#      VpcId: !Ref rVPC
+
+#
+# Security Groups
+#
 
   rMasterSG:
     Type: AWS::EC2::SecurityGroup
@@ -381,7 +432,7 @@ Resources:
       - IpProtocol: udp
         FromPort: 4789
         ToPort: 4789
-        DestinationSecurityGroup: !Ref rNodeSG
+        DestinationSecurityGroupId: !Ref rNodeSG
       Tags:
         - Key: Name
           Value: !Sub ${pVPCName}-haproxy
@@ -438,3 +489,11 @@ Outputs:
         Value: !Ref rRouteTableMain
         Export:
           Name: !Sub ${pVPCName}-publicRT
+    rPrivateRouteTable:
+        Value: !Ref rRouteTablePrivate
+        Export:
+          Name: !Sub ${pVPCName}-privateRT
+    rS3Endpoint:
+        Value: !Ref rVPCS3Endpoint
+        Export:
+          Name: !Sub ${pVPCName}-s3Endpoint
