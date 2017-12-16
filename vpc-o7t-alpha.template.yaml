@@ -344,9 +344,15 @@ Resources:
         FromPort: 22
         ToPort: 22
         CidrIp: 170.40.0.0/16
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp: !Ref pProductionCIDR
       SecurityGroupEgress: # disable the default egress to 0.0.0.0/0
-      - CidrIp: 127.0.0.1/16
-        IpProtocol: "-1"
+      - CidrIp: !Ref pProductionCIDR
+        IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
       Tags:
         - Key: Name
           Value: !Sub ${pVPCName}-ssh
