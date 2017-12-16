@@ -369,4 +369,8 @@ Outputs:
     rVPC:
         Value: !Ref rVPC
         Export:
-          Name: !Sub ${AWS::StackName}-vpcid
+          Name: !Sub ${pVPCName}-vpcid
+    rPublicRouteTable:
+        Value: !Ref rRouteTableMain
+        Export:
+          Name: !Sub ${pVPCName}-publicRT

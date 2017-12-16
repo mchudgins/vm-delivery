@@ -6,15 +6,16 @@ Metadata:
           - Label:
                 default: Subnet Configuration
             Parameters:
-              - pVPC
+#              - pVPC
+              - pVPCName
               - pClusterName
               - pPublicCIDR
               - pPrivateCIDR
               - pMgmtCIDR
               - pAZ
         ParameterLabels:
-            pVPC:
-                default: VPC
+#            pVPC:
+#                default: VPC
             pClusterName:
                 default: Cluster Name
             pPublicCIDR:
@@ -27,9 +28,13 @@ Metadata:
                 default: Availability Zone
 
 Parameters:
-    pVPC:
-        Description: VPC
-        Type: AWS::EC2::VPC::Id
+#    pVPC:
+#        Description: VPC
+#        Type: AWS::EC2::VPC::Id
+    pVPCName:
+        Description: VPC Name
+        Type: String
+        Default: "o7t-alpha"
     pClusterName:
         Description: (a-z[a-z|0-9]*)
         Type: String
@@ -64,7 +69,17 @@ Resources:
             Value: !Ref AWS::StackName
           - Key: Cluster
             Value: !Ref pClusterName
-        VpcId: !Ref pVPC
+        VpcId:
+          Fn::ImportValue: !Sub ${pVPCName}-vpcid
+
+  # the public subnet can use the public route table (with IGW)
+  rPublicRouteAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    DependsOn: rPublicSubnet
+    Properties:
+      RouteTableId:
+        Fn::ImportValue: !Sub ${pVPCName}-publicRT
+      SubnetId: !Ref rPublicSubnet
 
   rPrivateSubnet:
     Type: AWS::EC2::Subnet
@@ -79,7 +94,8 @@ Resources:
             Value: !Ref AWS::StackName
           - Key: Cluster
             Value: !Ref pClusterName
-        VpcId: !Ref pVPC
+        VpcId:
+          Fn::ImportValue: !Sub ${pVPCName}-vpcid
 
   rMgmtSubnet:
     Type: AWS::EC2::Subnet
@@ -94,21 +110,27 @@ Resources:
             Value: !Ref AWS::StackName
           - Key: Cluster
             Value: !Ref pClusterName
-        VpcId: !Ref pVPC
+        VpcId:
+          Fn::ImportValue: !Sub ${pVPCName}-vpcid
 
   rACL:
     Type: AWS::EC2::NetworkAcl
     Properties:
-      VpcId: !Ref pVPC
+      VpcId:
+        Fn::ImportValue: !Sub ${pVPCName}-vpcid
       Tags:
       - Key: Name
         Value: !Sub ${pClusterName}-pub
       - Key: Cluster
         Value: !Ref pClusterName
 
+  #
+  # Network ACL Definition for the Public Subnet
+  #
+
   rACLRule100:
-    DependsOn: rACL
     Type: "AWS::EC2::NetworkAclEntry"
+    DependsOn: rACL
     Properties:
       CidrBlock: 170.40.0.0/16
       Egress: false
@@ -149,7 +171,7 @@ Resources:
       RuleAction: allow
       RuleNumber: 101
 
-  rACLRuleEgress100:
+  rACLRuleEgress101:
     Type: "AWS::EC2::NetworkAclEntry"
     DependsOn: rACL
     Properties:
@@ -220,31 +242,36 @@ Resources:
       RuleAction: allow
       RuleNumber: 250
 
+  rPublicSubnetACLAssociation:
+    Type: "AWS::EC2::SubnetNetworkAclAssociation"
+    DependsOn:
+    - rACL
+    - rPublicSubnet
+    Properties:
+      SubnetId: !Ref rPublicSubnet
+      NetworkAclId: !Ref rACL
+
+  #
+  # Network ACL Definition for the Private Subnet
+  #
+
   rACLPrivate:
     Type: AWS::EC2::NetworkAcl
     Properties:
-      VpcId: !Ref pVPC
+      VpcId:
+        Fn::ImportValue: !Sub ${pVPCName}-vpcid
       Tags:
       - Key: Name
         Value: !Sub ${pClusterName}-priv
       - Key: Cluster
         Value: !Ref pClusterName
 
-  rACLMgmt:
-    Type: AWS::EC2::NetworkAcl
-    Properties:
-      VpcId: !Ref pVPC
-      Tags:
-      - Key: Name
-        Value: !Sub ${pClusterName}-mgmt
-      - Key: Cluster
-        Value: !Ref pClusterName
-
+  # for now, permit any internal traffic in/out thru the rACLPrivate and depend on security groups
   rACLPrivateRule100:
     Type: "AWS::EC2::NetworkAclEntry"
     DependsOn: rACLPrivate
     Properties:
-      CidrBlock: !Ref pProductionCIDR
+      CidrBlock: !Ref pPublicCIDR
       Egress: false
       NetworkAclId: !Ref rACLPrivate
       PortRange:
@@ -258,7 +285,35 @@ Resources:
     Type: "AWS::EC2::NetworkAclEntry"
     DependsOn: rACLPrivate
     Properties:
-      CidrBlock: !Ref pProductionCIDR
+      CidrBlock: !Ref pPublicCIDR
+      Egress: true
+      NetworkAclId: !Ref rACLPrivate
+      PortRange:
+        From: 32768
+        To: 60999
+      Protocol: -1
+      RuleAction: allow
+      RuleNumber: 100
+
+  rACLPrivateRule200:
+    Type: "AWS::EC2::NetworkAclEntry"
+    DependsOn: rACLPrivate
+    Properties:
+      CidrBlock: !Ref pMgmtCIDR
+      Egress: false
+      NetworkAclId: !Ref rACLPrivate
+      PortRange:
+        From: 22
+        To: 64000
+      Protocol: -1
+      RuleAction: allow
+      RuleNumber: 200
+
+  rACLPrivateRuleEgress200:
+    Type: "AWS::EC2::NetworkAclEntry"
+    DependsOn: rACLPrivate
+    Properties:
+      CidrBlock: !Ref pMgmtCIDR
       Egress: true
       NetworkAclId: !Ref rACLPrivate
       PortRange:
@@ -266,10 +321,108 @@ Resources:
         To: 64000
       Protocol: -1
       RuleAction: allow
-      RuleNumber: 100
+      RuleNumber: 200
+
+  rPrivateSubnetACLAssociation:
+    Type: "AWS::EC2::SubnetNetworkAclAssociation"
+    DependsOn:
+    - rACLPrivate
+    - rPrivateSubnet
+    Properties:
+      SubnetId: !Ref rPrivateSubnet
+      NetworkAclId: !Ref rACLPrivate
+
+  #
+  # Network ACL Definition for the Management Subnet
+  #
+
+  rACLMgmt:
+    Type: AWS::EC2::NetworkAcl
+    Properties:
+      VpcId:
+        Fn::ImportValue: !Sub ${pVPCName}-vpcid
+      Tags:
+      - Key: Name
+        Value: !Sub ${pClusterName}-mgmt
+      - Key: Cluster
+        Value: !Ref pClusterName
+
+  # for now, permit any internal traffic in/out thru the rACLPrivate and depend on security groups
+  rACLMgmtRule200:
+    Type: "AWS::EC2::NetworkAclEntry"
+    DependsOn: rACLMgmt
+    Properties:
+      CidrBlock: !Ref pPublicCIDR
+      Egress: false
+      NetworkAclId: !Ref rACLMgmt
+      PortRange:
+        From: 22
+        To: 64000
+      Protocol: -1
+      RuleAction: allow
+      RuleNumber: 200
+
+  rACLMgmtRuleEgress200:
+    Type: "AWS::EC2::NetworkAclEntry"
+    DependsOn: rACLMgmt
+    Properties:
+      CidrBlock: !Ref pPublicCIDR
+      Egress: true
+      NetworkAclId: !Ref rACLMgmt
+      PortRange:
+        From: 32768
+        To: 60999
+      Protocol: -1
+      RuleAction: allow
+      RuleNumber: 200
+
+  rACLMgmtRule250:
+    Type: "AWS::EC2::NetworkAclEntry"
+    DependsOn: rACLMgmt
+    Properties:
+      CidrBlock: !Ref pPrivateCIDR
+      Egress: false
+      NetworkAclId: !Ref rACLMgmt
+      PortRange:
+        From: 22
+        To: 64000
+      Protocol: -1
+      RuleAction: allow
+      RuleNumber: 250
+
+  rACLMgmtRuleEgress250:
+    Type: "AWS::EC2::NetworkAclEntry"
+    DependsOn: rACLMgmt
+    Properties:
+      CidrBlock: !Ref pPrivateCIDR
+      Egress: true
+      NetworkAclId: !Ref rACLMgmt
+      PortRange:
+        From: 0
+        To: 64000
+      Protocol: -1
+      RuleAction: allow
+      RuleNumber: 250
+
+  rMgmtSubnetACLAssociation:
+    Type: "AWS::EC2::SubnetNetworkAclAssociation"
+    DependsOn:
+    - rACLMgmt
+    - rMgmtSubnet
+    Properties:
+      SubnetId: !Ref rMgmtSubnet
+      NetworkAclId: !Ref rACLMgmt
 
 Outputs:
     rPublicSubnet:
         Value: !Ref rPublicSubnet
         Export:
-          Name: !Sub ${AWS::StackName}-public-subnet
+          Name: !Sub ${pClusterName}-public-subnet
+    rPrivateSubnet:
+        Value: !Ref rPrivateSubnet
+        Export:
+          Name: !Sub ${pClusterName}-private-subnet
+    rMgmtSubnet:
+        Value: !Ref rMgmtSubnet
+        Export:
+          Name: !Sub ${pClusterName}-mgmt-subnet
