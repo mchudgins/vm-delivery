@@ -38,6 +38,17 @@ Parameters:
           - CI/CD
           - development
 
+Mappings:
+  RegionMap:
+    us-east-1:
+      s3PrefixListId: pl-63a5400a
+    us-east-2:
+      s3PrefixListId: pl-7ba54012
+    us-west-1:
+      s3PrefixListId: pl-6ba54002
+    us-west-2:
+      s3PrefixListId: pl-68a54001
+
 Resources:
   rDHCPOptions:
     Type: AWS::EC2::DHCPOptions
@@ -163,7 +174,9 @@ Resources:
 
   rMasterSG:
     Type: AWS::EC2::SecurityGroup
-    DependsOn: rVPC
+    DependsOn:
+    - rVPC
+    - rVPCS3Endpoint
     Properties:
       GroupName: !Sub ${pVPCName}-master
       GroupDescription: Openshift Master access
@@ -173,6 +186,11 @@ Resources:
         FromPort: 8443
         ToPort: 8443
         CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        DestinationPrefixListId: !FindInMap [ RegionMap, !Ref "AWS::Region", s3PrefixListId ]
       Tags:
         - Key: Name
           Value: !Sub ${pVPCName}-master
@@ -196,6 +214,10 @@ Resources:
       SecurityGroupEgress: # disable the default egress to 0.0.0.0/0
       - CidrIp: 127.0.0.1/16
         IpProtocol: "-1"
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        DestinationPrefixListId: !FindInMap [ RegionMap, !Ref "AWS::Region", s3PrefixListId ]
       Tags:
         - Key: Name
           Value: !Sub ${pVPCName}-etcd
@@ -267,6 +289,10 @@ Resources:
         FromPort: 9100
         ToPort: 9100
         DestinationSecurityGroupId: !Ref rEtcdSG
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        DestinationPrefixListId: !FindInMap [ RegionMap, !Ref "AWS::Region", s3PrefixListId ]
       Tags:
         - Key: Name
           Value: !Sub ${pVPCName}-node
