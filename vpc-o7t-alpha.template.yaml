@@ -8,12 +8,22 @@ Metadata:
             Parameters:
               - pVPCName
               - pProductionCIDR
+              - pMgmtCIDR
+              - pAZ
+              - pEnvironment
               - pVPCTenancy
         ParameterLabels:
             pVPCName:
                 default: Name of VPC
             pProductionCIDR:
                 default: VPC CIDR block
+            pMgmtCIDR:
+                default: Managment Subnet CIDR
+            pAZ:
+                default: Availability Zone
+            pEnvironment:
+                default: Environment
+
 Parameters:
     pVPCName:
         Description: Production VPC Name
@@ -23,6 +33,10 @@ Parameters:
         Description: CIDR block for Production VPC
         Type: String
         Default: 10.250.0.0/16
+    pMgmtCIDR:
+#        Description: CIDR block for Management subnet
+        Type: String
+        Default: 10.250.254.0/24
     pVPCTenancy:
         Description: Instance tenancy behavior for this VPC
         Type: String
@@ -37,6 +51,10 @@ Parameters:
           - alpha
           - CI/CD
           - development
+    pAZ:
+        Description: Availability Zone
+        Type: AWS::EC2::AvailabilityZone::Name
+        Default: us-east-1e
 
 Mappings:
   RegionMap:
@@ -169,6 +187,22 @@ Resources:
 #      VpcId: !Ref rVPC
 
 #
+# Create a Management subnet which interacts with all subnets
+#
+
+  rMgmtSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+        AvailabilityZone: !Ref pAZ
+        CidrBlock: !Ref pMgmtCIDR
+        MapPublicIpOnLaunch: false
+        Tags:
+          - Key: Name
+            Value: !Sub ${pVPCName}-mgmt
+        VpcId: !Ref rVPC
+
+
+#
 # Security Groups
 #
 
@@ -245,6 +279,18 @@ Resources:
       FromPort: 2380
       ToPort: 2380
       DestinationSecurityGroupId: !Ref rEtcdSG
+
+  rEtcdToAWSEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    DependsOn:
+    - rEtcdSG
+    - rAWSInterfaceSG
+    Properties:
+      GroupId: !Ref rEtcdSG
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+      DestinationSecurityGroupId: !Ref rAWSInterfaceSG
 
   rNodeSG:
     Type: AWS::EC2::SecurityGroup
@@ -506,6 +552,37 @@ Resources:
       ToPort: 8443
       CidrIp: 136.33.81.197/32
 
+  # This SG is used by VPC Endpoints to permit Nodes/Etcd to use AWS services w/o NAT
+  rAWSInterfaceSG:
+    Type: AWS::EC2::SecurityGroup
+    DependsOn:
+    - rVPC
+    - rMasterSG
+    - rNodeSG
+    - rEtcdSG
+    Properties:
+      GroupName: !Sub ${pVPCName}-aws
+      GroupDescription: Access to AWS services
+      VpcId: !Ref rVPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        SourceSecurityGroupId: !Ref rNodeSG
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        SourceSecurityGroupId: !Ref rEtcdSG
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        SourceSecurityGroupId: !Ref rMasterSG
+      Tags:
+        - Key: Name
+          Value: !Sub ${pVPCName}-aws
+        - Key: VPC
+          Value: !Ref pVPCName
+
 Outputs:
     rVPC:
         Value: !Ref rVPC
@@ -523,3 +600,7 @@ Outputs:
         Value: !Ref rVPCS3Endpoint
         Export:
           Name: !Sub ${pVPCName}-s3Endpoint
+    rAZ:
+        Value: !Ref pAZ
+        Export:
+          Name: !Sub ${pVPCName}-az

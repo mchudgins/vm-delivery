@@ -105,22 +105,6 @@ Resources:
         VpcId:
           Fn::ImportValue: !Sub ${pVPCName}-vpcid
 
-  rMgmtSubnet:
-    Type: AWS::EC2::Subnet
-    Properties:
-        AvailabilityZone: !Ref pAZ
-        CidrBlock: !Ref pMgmtCIDR
-        MapPublicIpOnLaunch: false
-        Tags:
-          - Key: Name
-            Value: !Sub ${pClusterName}-mgmt
-          - Key: StackName
-            Value: !Ref AWS::StackName
-          - Key: Cluster
-            Value: !Ref pClusterName
-        VpcId:
-          Fn::ImportValue: !Sub ${pVPCName}-vpcid
-
   # the private & mgmt subnets can use the private route table
   rPrivateRouteAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
