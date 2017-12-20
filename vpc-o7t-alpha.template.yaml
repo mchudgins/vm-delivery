@@ -7,7 +7,7 @@ Metadata:
                 default: VPC Configuration
             Parameters:
               - pVPCName
-              - pProductionCIDR
+              - pVPCCIDR
               - pMgmtCIDR
               - pAZ
               - pEnvironment
@@ -15,7 +15,7 @@ Metadata:
         ParameterLabels:
             pVPCName:
                 default: Name of VPC
-            pProductionCIDR:
+            pVPCCIDR:
                 default: VPC CIDR block
             pMgmtCIDR:
                 default: Managment Subnet CIDR
@@ -29,7 +29,7 @@ Parameters:
         Description: Production VPC Name
         Type: String
         Default: o7t-alpha
-    pProductionCIDR:
+    pVPCCIDR:
         Description: CIDR block for Production VPC
         Type: String
         Default: 10.250.0.0/16
@@ -83,7 +83,7 @@ Resources:
   rVPC:
     Type: AWS::EC2::VPC
     Properties:
-      CidrBlock: !Ref pProductionCIDR
+      CidrBlock: !Ref pVPCCIDR
       InstanceTenancy: !Ref pVPCTenancy
       EnableDnsSupport: true
       EnableDnsHostnames: true
@@ -188,6 +188,8 @@ Resources:
 
 #
 # Create a Management subnet which interacts with all subnets
+# The subnet contains the vpc endpoints for AWS services, so
+# the NACLs need to permit external ip addresses
 #
 
   rMgmtSubnet:
@@ -201,6 +203,180 @@ Resources:
             Value: !Sub ${pVPCName}-mgmt
         VpcId: !Ref rVPC
 
+  rMgmtRouteAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    DependsOn:
+    - rMgmtSubnet
+    - rRouteTableMain
+    Properties:
+      RouteTableId: !Ref rRouteTableMain
+      SubnetId: !Ref rMgmtSubnet
+
+  #
+  # Network ACL Definition for the Management Subnet
+  #
+
+  rACLMgmt:
+    Type: AWS::EC2::NetworkAcl
+    Properties:
+      VpcId: !Ref rVPC
+      Tags:
+      - Key: Name
+        Value: !Sub ${pVPCName}-mgmt
+      - Key: VPC
+        Value: !Ref pVPCName
+
+  rACLMgmtRule100:
+    Type: "AWS::EC2::NetworkAclEntry"
+    DependsOn: rACLMgmt
+    Properties:
+      CidrBlock: 170.40.0.0/16
+      Egress: false
+      NetworkAclId: !Ref rACLMgmt
+      PortRange:
+        From: 22
+        To: 8443
+      Protocol: 6
+      RuleAction: allow
+      RuleNumber: 100
+
+  rACLMgmtRuleEgress100:
+    Type: "AWS::EC2::NetworkAclEntry"
+    DependsOn: rACLMgmt
+    Properties:
+      CidrBlock: 170.40.0.0/16
+      Egress: true
+      NetworkAclId: !Ref rACLMgmt
+      PortRange:
+        From: 32768
+        To: 60999
+      Protocol: 6
+      RuleAction: allow
+      RuleNumber: 100
+
+  # Hudgins' home
+  rACLMgmtRule101:
+    Type: "AWS::EC2::NetworkAclEntry"
+    DependsOn: rACLMgmt
+    Properties:
+      CidrBlock: 136.33.81.197/32
+      Egress: false
+      NetworkAclId: !Ref rACLMgmt
+      PortRange:
+        From: 22
+        To: 8443
+      Protocol: 6
+      RuleAction: allow
+      RuleNumber: 101
+
+  rACLMgmtRuleEgress101:
+    Type: "AWS::EC2::NetworkAclEntry"
+    DependsOn: rACLMgmt
+    Properties:
+      CidrBlock: 136.33.81.197/32
+      Egress: true
+      NetworkAclId: !Ref rACLMgmt
+      PortRange:
+        From: 32768
+        To: 60999
+      Protocol: 6
+      RuleAction: allow
+      RuleNumber: 101
+
+  # for now, permit any internal traffic in/out thru the rACLPrivate and depend on security groups
+  rACLMgmtRule200:
+    Type: "AWS::EC2::NetworkAclEntry"
+    DependsOn: rACLMgmt
+    Properties:
+      CidrBlock: !Ref pVPCCIDR
+      Egress: false
+      NetworkAclId: !Ref rACLMgmt
+      PortRange:
+        From: 22
+        To: 64000
+      Protocol: -1
+      RuleAction: allow
+      RuleNumber: 200
+
+  rACLMgmtRuleEgress200:
+    Type: "AWS::EC2::NetworkAclEntry"
+    DependsOn: rACLMgmt
+    Properties:
+      CidrBlock: !Ref pVPCCIDR
+      Egress: true
+      NetworkAclId: !Ref rACLMgmt
+      PortRange:
+        From: 32768
+        To: 60999
+      Protocol: -1
+      RuleAction: allow
+      RuleNumber: 200
+
+  # these rules allow access to the s3 vpc endpoint and are specific to us-east-1
+  rACLMgmtRule300:
+    Type: "AWS::EC2::NetworkAclEntry"
+    DependsOn: rACLMgmt
+    Properties:
+      CidrBlock: 54.231.0.0/17
+      Egress: false
+      NetworkAclId: !Ref rACLMgmt
+      PortRange:
+        From: 32768
+        To: 60999
+      Protocol: 6
+      RuleAction: allow
+      RuleNumber: 300
+
+  rACLMgmtRuleEgress300:
+    Type: "AWS::EC2::NetworkAclEntry"
+    DependsOn: rACLMgmt
+    Properties:
+      CidrBlock: 54.231.0.0/17
+      Egress: true
+      NetworkAclId: !Ref rACLMgmt
+      PortRange:
+        From: 443
+        To: 443
+      Protocol: 6
+      RuleAction: allow
+      RuleNumber: 300
+
+  rACLMgmtRule301:
+    Type: "AWS::EC2::NetworkAclEntry"
+    DependsOn: rACLMgmt
+    Properties:
+      CidrBlock: 52.216.0.0/15
+      Egress: false
+      NetworkAclId: !Ref rACLMgmt
+      PortRange:
+        From: 32768
+        To: 60999
+      Protocol: 6
+      RuleAction: allow
+      RuleNumber: 301
+
+  rACLMgmtRuleEgress301:
+    Type: "AWS::EC2::NetworkAclEntry"
+    DependsOn: rACLMgmt
+    Properties:
+      CidrBlock: 52.216.0.0/15
+      Egress: true
+      NetworkAclId: !Ref rACLMgmt
+      PortRange:
+        From: 443
+        To: 443
+      Protocol: 6
+      RuleAction: allow
+      RuleNumber: 301
+
+  rMgmtSubnetACLAssociation:
+    Type: "AWS::EC2::SubnetNetworkAclAssociation"
+    DependsOn:
+    - rACLMgmt
+    - rMgmtSubnet
+    Properties:
+      SubnetId: !Ref rMgmtSubnet
+      NetworkAclId: !Ref rACLMgmt
 
 #
 # Security Groups
@@ -280,18 +456,6 @@ Resources:
       ToPort: 2380
       DestinationSecurityGroupId: !Ref rEtcdSG
 
-  rEtcdToAWSEgress:
-    Type: AWS::EC2::SecurityGroupEgress
-    DependsOn:
-    - rEtcdSG
-    - rAWSInterfaceSG
-    Properties:
-      GroupId: !Ref rEtcdSG
-      IpProtocol: tcp
-      FromPort: 443
-      ToPort: 443
-      DestinationSecurityGroupId: !Ref rAWSInterfaceSG
-
   rNodeSG:
     Type: AWS::EC2::SecurityGroup
     DependsOn:
@@ -328,14 +492,6 @@ Resources:
         ToPort: 8053
         DestinationSecurityGroupId: !Ref rMasterSG
       - IpProtocol: tcp
-        FromPort: 9100
-        ToPort: 9100
-        DestinationSecurityGroupId: !Ref rMasterSG
-      - IpProtocol: tcp
-        FromPort: 9100
-        ToPort: 9100
-        DestinationSecurityGroupId: !Ref rEtcdSG
-      - IpProtocol: tcp
         FromPort: 443
         ToPort: 443
         DestinationPrefixListId: !FindInMap [ RegionMap, !Ref "AWS::Region", s3PrefixListId ]
@@ -350,52 +506,6 @@ Resources:
           Value: !GetAtt rMasterSG.GroupId
         - Key: master.groupName
           Value: !Ref rMasterSG
-
-  rMasterPromIngress:
-    Type: AWS::EC2::SecurityGroupIngress
-    DependsOn:
-    - rMasterSG
-    - rNodeSG
-    Properties:
-      GroupId: !Ref rMasterSG
-      IpProtocol: tcp
-      FromPort: 9100
-      ToPort: 9100
-      SourceSecurityGroupId: !Ref rNodeSG
-
-  rEtcdPromIngress:
-    Type: AWS::EC2::SecurityGroupIngress
-    DependsOn:
-    - rEtcdSG
-    - rNodeSG
-    Properties:
-      GroupId: !Ref rEtcdSG
-      IpProtocol: tcp
-      FromPort: 9100
-      ToPort: 9100
-      SourceSecurityGroupId: !Ref rNodeSG
-
-  rNodePromIngress:
-    Type: AWS::EC2::SecurityGroupIngress
-    DependsOn:
-    - rNodeSG
-    Properties:
-      GroupId: !Ref rNodeSG
-      IpProtocol: tcp
-      FromPort: 9100
-      ToPort: 9100
-      SourceSecurityGroupId: !Ref rNodeSG
-
-  rNodePromEgress:
-    Type: AWS::EC2::SecurityGroupEgress
-    DependsOn:
-    - rNodeSG
-    Properties:
-      GroupId: !Ref rNodeSG
-      IpProtocol: tcp
-      FromPort: 9100
-      ToPort: 9100
-      DestinationSecurityGroupId: !Ref rNodeSG
 
   # an Egress rule for the rMasterSG to permit the master to talk to Nodes
   rMasterToNodeEgress:
@@ -528,9 +638,9 @@ Resources:
       - IpProtocol: tcp
         FromPort: 22
         ToPort: 22
-        CidrIp: !Ref pProductionCIDR
+        CidrIp: !Ref pVPCCIDR
       SecurityGroupEgress: # disable the default egress to 0.0.0.0/0
-      - CidrIp: !Ref pProductionCIDR
+      - CidrIp: !Ref pVPCCIDR
         IpProtocol: tcp
         FromPort: 22
         ToPort: 22
@@ -583,6 +693,82 @@ Resources:
         - Key: VPC
           Value: !Ref pVPCName
 
+  rNodeToAWSEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    DependsOn:
+    - rNodeSG
+    - rAWSInterfaceSG
+    Properties:
+      GroupId: !Ref rNodeSG
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+      DestinationSecurityGroupId: !Ref rAWSInterfaceSG
+
+  rEtcdToAWSEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    DependsOn:
+    - rEtcdSG
+    - rAWSInterfaceSG
+    Properties:
+      GroupId: !Ref rEtcdSG
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+      DestinationSecurityGroupId: !Ref rAWSInterfaceSG
+
+  # SecurityGroups for Prometheus clients and servers
+  rPromServerSG:
+    Type: AWS::EC2::SecurityGroup
+    DependsOn:
+    - rVPC
+    Properties:
+      GroupName: !Sub ${pVPCName}-prometheus-server
+      GroupDescription: permissions for Prometheus
+      VpcId: !Ref rVPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub ${pVPCName}-prometheus
+        - Key: VPC
+          Value: !Ref pVPCName
+
+  rPromMonitoredInstanceSG:
+    Type: AWS::EC2::SecurityGroup
+    DependsOn:
+    - rVPC
+    - rPromServerSG
+    Properties:
+      GroupName: !Sub ${pVPCName}-prometheus-monitored-instance
+      GroupDescription: permissions for Prometheus to access the instance
+      VpcId: !Ref rVPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 9100
+        ToPort: 9100
+        SourceSecurityGroupId: !Ref rPromServerSG
+      Tags:
+        - Key: Name
+          Value: !Sub ${pVPCName}-prometheus-monitored-instance
+        - Key: VPC
+          Value: !Ref pVPCName
+
+  rPromServerToMonitoredInstanceEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    DependsOn:
+    - rPromServerSG
+    - rPromMonitoredInstanceSG
+    Properties:
+      GroupId: !Ref rPromServerSG
+      IpProtocol: tcp
+      FromPort: 9100
+      ToPort: 9100
+      DestinationSecurityGroupId: !Ref rPromMonitoredInstanceSG
+
 Outputs:
     rVPC:
         Value: !Ref rVPC
@@ -604,3 +790,7 @@ Outputs:
         Value: !Ref pAZ
         Export:
           Name: !Sub ${pVPCName}-az
+    rMgmtCIDR:
+        Value: !Ref pMgmtCIDR
+        Export:
+          Name: !Sub ${pVPCName}-mgmtCIDR
