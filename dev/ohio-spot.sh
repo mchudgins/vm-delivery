@@ -1,12 +1,5 @@
 #! /bin/bash
 
-# check if a spot price was provided
-if [[ -z "${SPOT_PRICE}" ]]; then
-    BID_PRICE=0.0275
-else
-    BID_PRICE=${SPOT_PRICE}
-fi
-
 # function to find the subnet, based on a volume-id and a list of subnet descriptions
 function findSubnetFromVolumeID {
     local az=$2
@@ -24,12 +17,81 @@ function findSubnetFromVolumeID {
 # configuration
 #
 
-REGION=us-east-2
+REGION=us-east-1
 INSTANCE_TYPE=r4.xlarge
-VOLUME=vol-0adf4fd9ab9eb296d
-KEY_NAME="us-east-2a"
+
+#
+# flags from command line may supersede defaults
+#
+
+while test $# -gt 0; do
+    case "$1" in
+        --cluster)
+            shift
+            CLUSTER_NAME=$1
+            ;;
+
+        -h|--help)
+            echo `basename $0` '--region (us-east-1|us-west-2)'
+            ;;
+
+        --instance-type)
+            shift
+            INSTANCE_TYPE=$1
+            ;;
+
+        --key-name)
+            shift
+            KEY_NAME=$1
+            ;;
+
+        --region)
+            shift
+            REGION=$1
+            ;;
+
+        --spot-price)
+            shift
+            SPOT_PRICE=$1
+            ;;
+
+        --subnet)
+            shift
+            SUBNET=$1
+            ;;
+
+         *)
+            break
+            ;;
+
+    esac
+    shift
+done
+
+if [[ "${REGION}" == "us-east-1" && -z "${VOLUME}" && -z "${KEY_NAME}" ]]; then
+    VOLUME=vol-01b94820c77f80c3e
+    KEY_NAME="kp201707"
+    VPCID="vpc-94f4ffff"
+    SecurityGroups='"sg-5ef8153a"'
+fi
+
+if [[ "${REGION}" == "us-east-2" && -z "${VOLUME}" && -z "${KEY_NAME}" ]]; then
+    VOLUME=vol-0adf4fd9ab9eb296d
+    KEY_NAME="us-east-2a"
+    VPCID="vpc-b305eeda"
+    SecurityGroups='"sg-0a7b8863","sg-1e857176","sg-51867239"'
+fi
+
+# check if a spot price was provided
+if [[ -z "${SPOT_PRICE}" ]]; then
+    BID_PRICE=0.0275
+else
+    BID_PRICE=${SPOT_PRICE}
+fi
+
+
 AZ=`aws --region ${REGION} ec2 describe-volumes --volume-ids ${VOLUME} | jq .Volumes[0].AvailabilityZone`
-SUBNETS=`aws --region ${REGION} ec2 describe-subnets`
+SUBNETS=`aws --region ${REGION} ec2 describe-subnets --filters Name=vpc-id,Values=${VPCID}`
 SUBNET=`findSubnetFromVolumeID "${SUBNETS}" ${AZ}`
 
 if [[ ! /bin/true ]]; then
@@ -101,9 +163,7 @@ cat <<EOF >${FILE}
     "ImageId": ${IMAGE_ID},
     "KeyName": "${KEY_NAME}",
     "SecurityGroupIds": [
-        "sg-0a7b8863",
-        "sg-1e857176",
-        "sg-51867239"
+        ${SecurityGroups}
     ],
     "UserData": "${USERDATA}",
     "InstanceType": "${INSTANCE_TYPE}",
@@ -155,7 +215,7 @@ while [[ "${instanceID}" == "null" ]]
 aws --region ${REGION} ec2 create-tags --resources ${instanceID} --tags Key=Name,Value=mch-dev
 
 #display the instance's IP ADDR
-ipaddr=`aws --region us-east-2 ec2 describe-instances --instance-ids ${instanceID} | jq .Reservations[0].Instances[0].PublicIpAddress`
+ipaddr=`aws --region ${REGION} ec2 describe-instances --instance-ids ${instanceID} | jq .Reservations[0].Instances[0].PublicIpAddress`
 echo Instance available at ${ipaddr}
 
 # update the DNS entry for this new instance of mch-dev.dstcorp.io
