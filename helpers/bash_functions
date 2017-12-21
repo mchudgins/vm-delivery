@@ -252,6 +252,6 @@ region=$1
 vpc=$2
 tagkey=$3
 
-aws --region ${region} ec2 describe-security-groups --filters Name=vpc-id,Values="${vpc}" Name=tag-key,Values="{tagkey}" \
+aws --region ${region} ec2 describe-security-groups --filters Name=vpc-id,Values="${vpc}" Name=tag-key,Values="${tagkey}" \
     | jq .SecurityGroups[0].GroupId | sed -e 's/"//g'
 }

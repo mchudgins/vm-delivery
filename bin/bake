@@ -115,7 +115,7 @@ if [[ -z "${SUBNET_ID}" ]]; then
 fi
 
 if [[ -z "${SECURITY_GROUP_ID}" ]]; then
-    sg=`findSecurityGroupWihtTag ${REGION} ${VPC_ID} Bakery`
+    sg=`findSecurityGroupWithTag ${REGION} ${VPC_ID} Bakery`
     if [[ -z "${sg}" ]] || "${sg}" == "null" ]]; then
         echo "Unable to find a SecurityGroup tagged with 'Bakery'"
         exit 3
