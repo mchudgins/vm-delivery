@@ -382,11 +382,39 @@ Resources:
 # Security Groups
 #
 
+  rVaultSG:
+    Type: AWS::EC2::SecurityGroup
+    DependsOn:
+    - rVPC
+    - rVPCS3Endpoint
+    Properties:
+      GroupName: !Sub ${pVPCName}-vault
+      GroupDescription: Vault
+      VpcId: !Ref rVPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: !Ref pVPCCIDR
+      SecurityGroupEgress:
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        DestinationPrefixListId: !FindInMap [ RegionMap, !Ref "AWS::Region", s3PrefixListId ]
+      Tags:
+        - Key: Name
+          Value: !Sub ${pVPCName}-vault
+        - Key: StackName
+          Value: !Ref AWS::StackName
+        - Key: VPC
+          Value: !Ref pVPCName
+
   rMasterSG:
     Type: AWS::EC2::SecurityGroup
     DependsOn:
     - rVPC
     - rVPCS3Endpoint
+    - rVaultSG
     Properties:
       GroupName: !Sub ${pVPCName}-master
       GroupDescription: Openshift Master access
@@ -397,6 +425,10 @@ Resources:
         ToPort: 8443
         CidrIp: 0.0.0.0/0
       SecurityGroupEgress:
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        DestinationSecurityGroupId: !Ref rVaultSG
       - IpProtocol: tcp
         FromPort: 443
         ToPort: 443
@@ -411,7 +443,9 @@ Resources:
 
   rEtcdSG:
     Type: AWS::EC2::SecurityGroup
-    DependsOn: rMasterSG
+    DependsOn:
+    - rMasterSG
+    - rVaultSG
     Properties:
       GroupName: !Sub ${pVPCName}-etcd
       GroupDescription: etcd access
@@ -421,9 +455,11 @@ Resources:
         FromPort: 2379
         ToPort: 2379
         SourceSecurityGroupId: !Ref rMasterSG
-      SecurityGroupEgress: # disable the default egress to 0.0.0.0/0
-      - CidrIp: 127.0.0.1/16
-        IpProtocol: "-1"
+      SecurityGroupEgress:
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        DestinationSecurityGroupId: !Ref rVaultSG
       - IpProtocol: tcp
         FromPort: 443
         ToPort: 443
@@ -461,6 +497,7 @@ Resources:
     DependsOn:
     - rMasterSG
     - rEtcdSG
+    - rVaultSG
     Properties:
       GroupName: !Sub ${pVPCName}-node
       GroupDescription: Openshift node access
@@ -471,6 +508,10 @@ Resources:
         ToPort: 10250
         SourceSecurityGroupId: !Ref rMasterSG
       SecurityGroupEgress:
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        DestinationSecurityGroupId: !Ref rVaultSG
       - IpProtocol: tcp
         FromPort: 8443
         ToPort: 8443
@@ -625,7 +666,9 @@ Resources:
 
   rPublicSSHSG:
     Type: AWS::EC2::SecurityGroup
-    DependsOn: rVPC
+    DependsOn:
+    - rVPC
+    - rVaultSG
     Properties:
       GroupName: !Sub ${pVPCName}-ssh
       GroupDescription: SSH access from DST
@@ -639,7 +682,11 @@ Resources:
         FromPort: 22
         ToPort: 22
         CidrIp: !Ref pVPCCIDR
-      SecurityGroupEgress: # disable the default egress to 0.0.0.0/0
+      SecurityGroupEgress:
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        DestinationSecurityGroupId: !Ref rVaultSG
       - CidrIp: !Ref pVPCCIDR
         IpProtocol: tcp
         FromPort: 22
@@ -722,6 +769,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     DependsOn:
     - rVPC
+    - rVaultSG
     Properties:
       GroupName: !Sub ${pVPCName}-prometheus-server
       GroupDescription: permissions for Prometheus
@@ -736,6 +784,11 @@ Resources:
           Value: !Sub ${pVPCName}-prometheus
         - Key: VPC
           Value: !Ref pVPCName
+      SecurityGroupEgress:
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        DestinationSecurityGroupId: !Ref rVaultSG
 
   rPromMonitoredInstanceSG:
     Type: AWS::EC2::SecurityGroup
