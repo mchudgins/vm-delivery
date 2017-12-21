@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 #echo ubuntu.ami dev.ami origin-master.ami
-targets="ubuntu dev etcd master"
+targets="ubuntu dev etcd master node vault"
 
 function mostRecentAMI {
     REGION="us-east-1"
@@ -13,6 +13,7 @@ function mostRecentAMI {
 
     # now find the latest image matching <IMAGE_STREAM>-<date/time>
     ORIGIN_DATE="0000-00-00T00:00:00.000Z"
+    ORIGIN_DATE="1970-01-01T00:00:00.000Z"
     MAX_DATE=${ORIGIN_DATE}
     MAX_IMAGE_INDEX=-1
 
@@ -27,8 +28,8 @@ function mostRecentAMI {
         if [[ ${tagName} == "ImageStream" ]]; then
             imageStream=`echo ${IMAGES} | jq .Images[$var].Tags[$iter].Value | sed -e 's/"//g'`
             if [[ "${IMAGE_STREAM}" == ${imageStream} ]]; then
-              IMAGE_DATE=`echo ${IMAGES} | jq .Images[$var].CreationDate`
-              if [[ "${MAX_DATE}" < "${IMAGE_DATE}" ]]; then
+              IMAGE_DATE=`echo ${IMAGES} | jq .Images[$var].CreationDate | sed -e 's/"//g'`
+              if [[ `date -d ${MAX_DATE} +%s` -lt `date -d ${IMAGE_DATE} +%s` ]]; then
                 MAX_DATE=${IMAGE_DATE}
                 MAX_IMAGE_INDEX=${var}
               fi
@@ -42,10 +43,8 @@ function mostRecentAMI {
         return 1
     else
         IMAGE_ID=`echo ${IMAGES} | jq .Images[${MAX_IMAGE_INDEX}].ImageId`
-#        echo ${IMAGE_ID} | sed -e 's/\"//g'
         echo ${IMAGE_ID} | sed -e 's/"//g' >${FILE}
-#        echo Date: ${IMAGE_DATE}
-        touch --date=`echo ${IMAGE_DATE} | sed 's/"//g'` ${FILE}
+        touch --date=${MAX_DATE} ${FILE}
         return 0
     fi
 }

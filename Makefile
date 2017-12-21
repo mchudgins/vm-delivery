@@ -28,5 +28,9 @@ node.ami: ubuntu.ami aws-bake.json node/cloud-init.sh
 	bin/bake --parent $(shell cat ubuntu.ami) --image-stream node --artifact-version 3.6.1 \
    		--description 'Origin Node based on Ubuntu 17.10' node/cloud-init.sh
 
+vault.ami: ubuntu.ami aws-bake.json vault/cloud-init.sh
+	bin/bake --parent $(shell cat ubuntu.ami) --image-stream vault --artifact-version 0.8.3 \
+   		--description 'Hashicorp Vault based on Ubuntu 17.10' vault/cloud-init.sh
+
 clean:
 	rm *.ami
