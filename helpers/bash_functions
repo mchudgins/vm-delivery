@@ -230,7 +230,8 @@ function findVPCWithTag {
 REGION=$1
 TAGKEY=$2
 
-value=`aws --region ${REGION} ec2 describe-vpcs --filters Name="tag-key",Values="${TAGKEY}" | jq .Vpcs[0].VpcId | sed 's/"//g'`
+value=`aws --region ${REGION} ec2 describe-vpcs --filters Name="tag-key",Values="${TAGKEY}" | jq .Vpcs[0].VpcId \
+    | sed -e 's/"//g'`
 echo ${value}
 }
 
@@ -242,5 +243,15 @@ tagkey=$3
 
 aws --region ${region} ec2 describe-subnets --filters Name=vpc-id,Values="${vpc}" Name=tag-key,Values="${tagkey}" \
     | jq .Subnets[0].SubnetId \
-    | sed 's/"//g'
+    | sed -e 's/"//g'
+}
+
+# find a security group in the vpc with the specifed tag
+function findSecurityGroupWithTag {
+region=$1
+vpc=$2
+tagkey=$3
+
+aws --region ${region} ec2 describe-security-groups --filters Name=vpc-id,Values="${vpc}" Name=tag-key,Values="{tagkey}" \
+    | jq .SecurityGroups[0].GroupId | sed -e 's/"//g'
 }

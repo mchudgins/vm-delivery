@@ -13,7 +13,7 @@ INSTANCE_TYPE="t2.medium"
 REGION="us-east-1"
 VPC_ID=""
 SUBNET_ID=""
-SECURITY_GROUP_ID="sg-5ef8153a"
+SECURITY_GROUP_ID=""
 INIT_SCRIPT=""
 
 while test $# -gt 0; do
@@ -112,6 +112,16 @@ if [[ -z "${SUBNET_ID}" ]]; then
     fi
 
     SUBNET_ID=${subnet}
+fi
+
+if [[ -z "${SECURITY_GROUP_ID}" ]]; then
+    sg=`findSecurityGroupWihtTag ${REGION} ${VPC_ID} Bakery`
+    if [[ -z "${sg}" ]] || "${sg}" == "null" ]]; then
+        echo "Unable to find a SecurityGroup tagged with 'Bakery'"
+        exit 3
+    fi
+
+    SECURITY_GROUP_ID=${sg}
 fi
 
 if [[ -z "${IMAGE_STREAM}" ]]; then
