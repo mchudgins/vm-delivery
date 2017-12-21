@@ -116,7 +116,7 @@ fi
 
 if [[ -z "${SECURITY_GROUP_ID}" ]]; then
     sg=`findSecurityGroupWithTag ${REGION} ${VPC_ID} Bakery`
-    if [[ -z "${sg}" ]] || "${sg}" == "null" ]]; then
+    if [[ -z "${sg}" || "${sg}" == "null" ]]; then
         echo "Unable to find a SecurityGroup tagged with 'Bakery'"
         exit 3
     fi
