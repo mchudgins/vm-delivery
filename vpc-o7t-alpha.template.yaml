@@ -717,6 +717,7 @@ Resources:
     - rMasterSG
     - rNodeSG
     - rEtcdSG
+    - rVaultSG
     Properties:
       GroupName: !Sub ${pVPCName}-aws
       GroupDescription: Access to AWS services
@@ -734,11 +735,27 @@ Resources:
         FromPort: 443
         ToPort: 443
         SourceSecurityGroupId: !Ref rMasterSG
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        SourceSecurityGroupId: !Ref rVaultSG
       Tags:
         - Key: Name
           Value: !Sub ${pVPCName}-aws
         - Key: VPC
           Value: !Ref pVPCName
+
+  rVaultToAWSEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    DependsOn:
+    - rVaultSG
+    - rAWSInterfaceSG
+    Properties:
+      GroupId: !Ref rVaultSG
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+      DestinationSecurityGroupId: !Ref rAWSInterfaceSG
 
   rNodeToAWSEgress:
     Type: AWS::EC2::SecurityGroupEgress
