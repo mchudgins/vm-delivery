@@ -48,10 +48,27 @@ if [[ $rc != 0 ]]; then
 fi
 
 
+#
+# vault url convention
+#
+# certificates:
+#
+#   /secret/certificates/<certificate domain name>
+#
+#   Example:  url of the certificate for etcd.dst.cloud
+#       /secret/certificates/etcd.dst.cloud
+#
+#   Example:  url of the certificate for *.dst.cloud
+#       /secret/certificates/star.dst.cloud
+#
+
+
 echo "deploying the certificate & key"
 vault write secret/etcd/seed-cluster cert=@${cert}
 # read it back with
 #   vault read -format=json secret/etcd/seed-cluster | jq .data.cert | sed -e 's/"//g' -e 's/\\n/\n/g'
+#       or
+#   vault read -field=key secret/etcd/seed-cluster
 rc=$?
 if [[ $rc != 0 ]]; then
     echo -e "\nError encountered writing/updating the certificate to Vault\n"
