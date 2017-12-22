@@ -1,6 +1,6 @@
 #! /bin/bash
 
-VAULT_ARTIFACT="s3://dstcorp/artifacts/vault-0.8.3.zip"
+VAULT_ARTIFACT="s3://dstcorp/artifacts/vault-0.9.1"
 
 # hmmmm, need to set the hostname to something the AWS DNS server knows
 sudo hostname `hostname -s`.ec2.internal
@@ -15,9 +15,9 @@ df -H
 sudo adduser --system --home /var/lib/vault --gecos 'vault,,,' --disabled-password vault
 
 # install & configure VAULT as a single (non-HA) instance using s3 as the backing storage
-aws s3 cp ${VAULT_ARTIFACT} /tmp/vault.zip \
-    && unzip /tmp/vault.zip \
-    && sudo mv vault /usr/local/bin \
+aws s3 cp ${VAULT_ARTIFACT} /tmp/vault \
+    && chmod +x /tmp/vault \
+    && sudo mv /tmp/vault /usr/local/bin \
     && sudo mkdir -p /usr/local/etc/vault \
     && sudo chown vault /usr/local/bin/vault \
     && sudo chown -R vault /var/lib/vault
