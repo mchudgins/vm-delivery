@@ -122,10 +122,13 @@ SECURITY_GROUP=`aws --region ${REGION} ec2 describe-security-groups \
 
 # create the cloud-init user data
 USERDATA=$(cat <<-"_EOF_" | sed -e "s/REGION=xxx/REGION=${REGION}/" | base64 -w 0
-#! /bin/bash
-REGION=xxx
-id >/tmp/id.uid
-#hostname vault-seed-${REGION}.dstcorp.io
+#! /usr/bin/env bash
+VAULT_BUCKET=io.dstcorp.vault.o7t-alpha
+echo VAULT_BUCKET=${VAULT_BUCKET} > /etc/default/vault
+iptables-restore < /etc/iptables.conf
+systemctl start vault
+sleep 5
+vault-prepare https://vault.dst.cloud:8200 s3://${VAULT_BUCKET}/vault.keys
 _EOF_
 )
 
@@ -167,7 +170,7 @@ IFS="." read -r -a el <<< "${INSTANCE_TYPE}"
 case "${el[0]}" in
     t2)
         USERDATAFILE=`mktemp`
-        echo ${USERDATA} >${USERDATAFILE}
+        echo ${USERDATA} | base64 -d >${USERDATAFILE}
         instanceID=$(launchInstance ${REGION} ${FILE} ${USERDATAFILE})
         rm ${USERDATAFILE}
         ;;
