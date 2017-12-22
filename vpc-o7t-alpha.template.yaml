@@ -396,11 +396,13 @@ Resources:
         FromPort: 443
         ToPort: 443
         CidrIp: !Ref pVPCCIDR
+        Description: permit all instances within the VPC
       SecurityGroupEgress:
       - IpProtocol: tcp
         FromPort: 443
         ToPort: 443
         DestinationPrefixListId: !FindInMap [ RegionMap, !Ref "AWS::Region", s3PrefixListId ]
+        Description: access to AWS S3 via vpc endpoint
       Tags:
         - Key: Name
           Value: !Sub ${pVPCName}-vault
