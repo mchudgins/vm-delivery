@@ -5,36 +5,11 @@ VAULT_ARTIFACT="s3://dstcorp/artifacts/vault-0.8.3.zip"
 # hmmmm, need to set the hostname to something the AWS DNS server knows
 sudo hostname `hostname -s`.ec2.internal
 
+echo 'OS Release : ' `cat /etc/issue`
+echo 'Kernel Info: ' `uname -a`
+
 echo 'Initial Disk Summary'
 df -H
-
-echo 'Starting Package Installations'
-
-#   update package info
-sudo apt-get update -yq
-
-# the grub package doesn't respect -y by itself, so we need a bunch of extra options,
-# or the provisioner will get stuck at an interactive prompt asking about Grub configuration
-# see http://askubuntu.com/questions/146921/how-do-i-apt-get-y-dist-upgrade-without-a-grub-config-prompt
-sudo DEBIAN_FRONTEND=noninteractive apt-get -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" upgrade -yq
-sudo apt-get install -yq --no-install-recommends \
-  apt-transport-https awscli \
-  bash-completion ca-certificates curl e2fsprogs ethtool htop jq \
-  linux-image-extra-virtual nano \
-  net-tools tcpdump unzip
-
-# stop unattended upgrades -- that's why we have baked images!
-sudo apt-get remove -yq unattended-upgrades
-sudo apt-get autoremove -yq
-
-# DST Root CA
-aws s3 cp s3://dstcorp/dst-root.crt /tmp
-sudo cp /tmp/dst-root.crt /usr/local/share/ca-certificates
-sudo update-ca-certificates
-
-# change the journald options to have only one log file
-# rather than one per user
-sudo sh -c 'echo "SplitMode=none" >>/etc/systemd/journald.conf'
 
 # create a non-privileged vault user
 sudo adduser --system --home /var/lib/vault --gecos 'vault,,,' --disabled-password vault
@@ -68,6 +43,18 @@ EOF
 sudo mv /tmp/vault.service /etc/systemd/system
 sudo systemctl daemon-reload
 
+# route requests for Vault on port 443 to listener on port 8200
+# note: need to save iptables across reboots via ifconfig up/down
+sudo iptables -t nat -A PREROUTING -p tcp --dport 443 -j REDIRECT --to-port 8200
+sudo iptables-save >/tmp/iptables.conf
+sudo cp /tmp/iptables.conf /etc
+cat <<"EOF" >/tmp/iptables
+#! /usr/bin/env bash
+iptables-restore < /etc/iptables.conf
+EOF
+chmod +x /tmp/iptables
+sudo cp /tmp/iptables /etc/network/if-up.d/iptables
+
 # use rc.local to launch vault
 sudo systemctl enable rc-local.service
 
@@ -75,7 +62,7 @@ sudo systemctl enable rc-local.service
 cat <<"EOF" >/tmp/rc.local
 #! /bin/bash
 VAULT_CONFIG=/usr/local/etc/vault/config.hcl
-hostname `hostname -s`.ec2.internal
+#hostname `hostname -s`.dst.cloud
 
 if [[ ! -f ${VAULT_CONFIG}} ]]; then
     REGION=`curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone | sed 's/[abcdefghijk]$//'`
@@ -105,6 +92,9 @@ EOF_CFG
     chmod u-w /usr/local/etc/vault/key.pem
     chown -R vault /usr/local/etc/vault
 fi
+
+# restore the iptables rules
+iptables-restore < /etc/iptables.conf
 
 #sudo -u vault /usr/local/bin/vault server -config=${VAULT_CONFIG} &
 systemctl start vault
