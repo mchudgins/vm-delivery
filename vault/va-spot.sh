@@ -152,6 +152,7 @@ cat <<EOF >${FILE}
     },
     "NetworkInterfaces": [
       {
+        "AssociatePublicIpAddress": true,
         "DeviceIndex": 0,
         "SubnetId": "${SUBNET}",
         "PrivateIpAddress": "${PRIVATE_IP}",

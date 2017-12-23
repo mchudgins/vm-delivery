@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+
+VAULT_ADDR=https://vault.dst.cloud
+
+if [[ -z "$1" ]]; then
+    echo "Hmmmm, you forgot to pass me the vault.keys location!"
+    exit 1
+fi
+
+S3KEYS=$1
+keys=`mktemp`
+aws s3 cp ${S3KEYS} ${keys}
+if [[ $? -ne 0 ]]; then
+    echo Unable to copy ${S3KEYS}
+    exit 1
+fi
+
+export VAULT_TOKEN=`grep "Initial Root Token" ${keys} | sed -e 's/^Initial Root Token: //' | tr -d '\n'`
+
+rm ${keys}
+
+cat <<EOF >/tmp/certificate-policy.hcl
+path "secret/certificates/*" {
+  capabilities = [ "read", "list"]
+}
+EOF
+vault policy-write certificate-reader /tmp/certificate-policy.hcl
+
+cat <<EOF >/tmp/ca-policy.hcl
+path "secret/certificates/*" {
+  capabilities = [ "read", "write", "list"]
+}
+
+path "secret/CA/*" {
+  capabilities = [ "read", "list"]
+}
+EOF
+vault policy-write ca /tmp/ca-policy.hcl
+
+ami_id=`curl -s http://169.254.169.254/latest/meta-data/ami-id`
+instance_id=`curl -s http://169.254.169.254/latest/meta-data/instance-id/`
+vpc_id=$(aws --region us-east-1 ec2 describe-instances --filters Name=instance-id,Values=${instance_id} \
+    | jq .Reservations[0].Instances[0].NetworkInterfaces[0].VpcId | sed -e 's/"//g')
+
+vault auth-enable aws
+vault write auth/aws/role/ec2-instance-role auth_type=ec2 policies=certificate-reader bound_vpc_id=${vpc_id} max_ttl=5m
+vault write auth/aws/role/ca-role auth_type=ec2 policies=ca bound_ami_id=${ami_id} max_ttl=5m
+
+#
+# put some certificate keys in vault
+#
+key=`mktemp`
+aws s3 cp s3://io.dstcorp.vault.o7t-alpha/star-dstcorp-io.key ${key}
+vault write secret/certificates/star.dstcorp.io key=@${key}
+rm ${key}
+
+key=`mktemp`
+aws s3 cp s3://io.dstcorp.vault.o7t-alpha/star-dev-dstcorp-io.key ${key}
+vault write secret/certificates/star.dev.dstcorp.io key=@${key}
+rm ${key}
+
+key=`mktemp`
+aws s3 cp s3://io.dstcorp.vault.o7t-alpha/ucap-ca.key ${key}
+vault write secret/CA/ucap-ca key=@${key}
+rm ${key}

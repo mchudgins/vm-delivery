@@ -221,6 +221,7 @@ function unSeal {
 
 
 # check the status of vault. if it hasn't been initialized, then initialize it.
+needsInitialization="no"
 statusFile=`mktemp`
 ${VAULT} status >${statusFile} 2>&1
 # a non-zero result means that vault may be uninitialized
@@ -231,6 +232,7 @@ if [[ $? -ne 0 ]]; then
     if [[ $? -eq 0 && "${result}" == "${marker}" ]]; then
         echo Vault is not initialized. Initializing ${VAULT_ADDR}.
         initVault
+        needsInitialization="yes"
     else
         result=`isSealed ${statusFile}`
         if [[ "${result}" != "sealed" ]]; then
@@ -257,6 +259,15 @@ statusFile=`mktemp`
 ${VAULT} status >${statusFile} 2>&1
 if [[ $? -eq 0 && "`isSealed ${statusFile}`" == "unsealed" ]]; then
     echo Vault is unsealed
+    if [[ "${needsInitialization}" == "yes" ]]; then
+        echo "Initializing vault with policies & keys"
+        aws s3 cp `dirname ${S3KEYS}`/vault-initializer /tmp/vault-initializer
+        chmod +x /tmp/vault-initializer
+        exec /tmp/vault-initializer ${S3KEYS}
+    fi
+    # ensure any instance with this (Vault) AMI can act as a CA
+    ami_id=`curl -s http://169.254.169.254/latest/meta-data/ami-id`
+    ${VAULT} write auth/aws/role/ca-role auth_type=ec2 bound_vpc_id=${ami_id} policies=ca max_ttl=5m
     exit 0
 fi
 rm ${statusFile}
