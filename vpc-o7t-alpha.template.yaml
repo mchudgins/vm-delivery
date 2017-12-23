@@ -369,6 +369,36 @@ Resources:
       RuleAction: allow
       RuleNumber: 301
 
+  # the Vault instance must access sts.amazonaws.com over the internet
+  # TO DO:  restrict this list to a known set of IP ADDR's
+  rACLMgmtRule400:
+    Type: "AWS::EC2::NetworkAclEntry"
+    DependsOn: rACLMgmt
+    Properties:
+      CidrBlock: 0.0.0.0/0
+      Egress: false
+      NetworkAclId: !Ref rACLMgmt
+      PortRange:
+        From: 32768
+        To: 60999
+      Protocol: 6
+      RuleAction: allow
+      RuleNumber: 400
+
+  rACLMgmtRuleEgress400:
+    Type: "AWS::EC2::NetworkAclEntry"
+    DependsOn: rACLMgmt
+    Properties:
+      CidrBlock: 0.0.0.0/0
+      Egress: true
+      NetworkAclId: !Ref rACLMgmt
+      PortRange:
+        From: 443
+        To: 443
+      Protocol: 6
+      RuleAction: allow
+      RuleNumber: 400
+
   rMgmtSubnetACLAssociation:
     Type: "AWS::EC2::SubnetNetworkAclAssociation"
     DependsOn:
@@ -403,6 +433,14 @@ Resources:
         ToPort: 443
         DestinationPrefixListId: !FindInMap [ RegionMap, !Ref "AWS::Region", s3PrefixListId ]
         Description: access to AWS S3 via vpc endpoint
+
+      # the Vault instance must access sts.amazonaws.com over the internet
+      # TO DO:  restrict this list to a known set of IP ADDR's
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: 0.0.0.0/0
+        Description: "TODO: restrict this to sts.amazonaws.com/iam.amazonaws.com"
       Tags:
         - Key: Name
           Value: !Sub ${pVPCName}-vault
