@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+
+BUCKET=$1
+if [[ -z "${BUCKET}" ]]; then
+    echo "Usage:  reset-bucket <bucket>"
+    exit 1
+fi
+
+aws s3 rm --recursive ${BUCKET}/auth/
+aws s3 rm --recursive ${BUCKET}/core/
+aws s3 rm --recursive ${BUCKET}/logical/
+aws s3 rm --recursive ${BUCKET}/sys/
