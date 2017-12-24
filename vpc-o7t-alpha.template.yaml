@@ -235,7 +235,7 @@ Resources:
       NetworkAclId: !Ref rACLMgmt
       PortRange:
         From: 22
-        To: 8443
+        To: 9999
       Protocol: 6
       RuleAction: allow
       RuleNumber: 100
@@ -264,7 +264,7 @@ Resources:
       NetworkAclId: !Ref rACLMgmt
       PortRange:
         From: 22
-        To: 8443
+        To: 9999
       Protocol: 6
       RuleAction: allow
       RuleNumber: 101
@@ -827,6 +827,7 @@ Resources:
     DependsOn:
     - rVPC
     - rVaultSG
+    - rAWSInterfaceSG
     Properties:
       GroupName: !Sub ${pVPCName}-prometheus-server
       GroupDescription: permissions for Prometheus
@@ -846,6 +847,10 @@ Resources:
         FromPort: 443
         ToPort: 443
         DestinationSecurityGroupId: !Ref rVaultSG
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        DestinationSecurityGroupId: !Ref rAWSInterfaceSG
 
   rPromMonitoredInstanceSG:
     Type: AWS::EC2::SecurityGroup
