@@ -779,6 +779,10 @@ Resources:
         FromPort: 443
         ToPort: 443
         SourceSecurityGroupId: !Ref rVaultSG
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        SourceSecurityGroupId: !Ref rPromServerSG
       Tags:
         - Key: Name
           Value: !Sub ${pVPCName}-aws
@@ -827,7 +831,6 @@ Resources:
     DependsOn:
     - rVPC
     - rVaultSG
-    - rAWSInterfaceSG
     Properties:
       GroupName: !Sub ${pVPCName}-prometheus-server
       GroupDescription: permissions for Prometheus
@@ -847,10 +850,6 @@ Resources:
         FromPort: 443
         ToPort: 443
         DestinationSecurityGroupId: !Ref rVaultSG
-      - IpProtocol: tcp
-        FromPort: 443
-        ToPort: 443
-        DestinationSecurityGroupId: !Ref rAWSInterfaceSG
 
   rPromMonitoredInstanceSG:
     Type: AWS::EC2::SecurityGroup
@@ -883,6 +882,18 @@ Resources:
       FromPort: 9100
       ToPort: 9100
       DestinationSecurityGroupId: !Ref rPromMonitoredInstanceSG
+
+  rPromServerToAWSEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    DependsOn:
+    - rPromServerSG
+    - rAWSInterfaceSG
+    Properties:
+      GroupId: !Ref rPromServerSG
+      IpProtocol: tcp
+      FromPort: 9100
+      ToPort: 9100
+      DestinationSecurityGroupId: !Ref rAWSInterfaceSG
 
 Outputs:
     rVPC:
