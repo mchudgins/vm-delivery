@@ -9,7 +9,7 @@ INSTANCE_TYPE=t2.nano
 KEY_NAME="kp201707"
 SUBNET=""
 SUBNET_NAME="o7t-alpha-mgmt"
-IMAGE_STREAM="dev"
+IMAGE_STREAM="prometheus"
 PRIVATE_IP=10.250.254.6
 
 source ../helpers/bash_functions
@@ -118,26 +118,7 @@ SECURITY_GROUP=`aws --region ${REGION} ec2 describe-security-groups \
 # create the cloud-init user data
 USERDATA=$(cat <<-"_EOF_" | sed -e "s/REGION=xxx/REGION=${REGION}/" | base64 -w 0
 #! /usr/bin/env bash
-cat <<EOF > /tmp/prometheus.yml
-global:
-  scrape_interval: 15s
-
-scrape_configs:
-  - job_name: 'node'
-
-    ec2_sd_configs:
-    - region: us-east-2
-      port: 9100
-
-    relabel_configs:
-      - source_labels: [__meta_ec2_tag_Name]
-        target_label: Name
-      - source_labels: [__meta_ec2_tag_instance_id]
-        target_label: instanceId
-      - source_labels: [__meta_ec2_tag_availability_zone]
-        target_label: AZ
-EOF
-docker run -d -p 9090:9090 -v /tmp/prometheus.yml:/etc/prometheus/prometheus.yml prom/prometheus
+systemctl start prometheus
 _EOF_
 )
 
@@ -153,7 +134,7 @@ cat <<EOF >${FILE}
     "UserData": "${USERDATA}",
     "InstanceType": "${INSTANCE_TYPE}",
     "IamInstanceProfile": {
-        "Name": "ec2VaultSeed"
+        "Name": "ec2PackerInstanceRole"
     },
     "EbsOptimized": ${EBS_OPTIMIZED},
     "Monitoring": {
@@ -203,7 +184,7 @@ echo instanceID ${instanceID}
 rm ${FILE}
 
 #tag the instance
-aws --region ${REGION} ec2 create-tags --resources ${instanceID} --tags Key=Name,Value=Prometheus
+aws --region ${REGION} ec2 create-tags --resources ${instanceID} --tags Key=Name,Value=${IMAGE_STREAM}
 
 #display the instance's IP ADDR
 #ipaddr=`aws --region ${REGION} ec2 describe-instances --instance-ids ${instanceID} | jq .Reservations[0].Instances[0].PublicIpAddress`
