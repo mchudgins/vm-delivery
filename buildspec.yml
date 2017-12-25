@@ -1,0 +1,7 @@
+version: 0.2
+
+phases:
+  build:
+    commands:
+    - echo "Entering build phase"
+    - aws s3 ls s3://
