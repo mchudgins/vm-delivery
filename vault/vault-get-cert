@@ -1,0 +1,34 @@
+#! /usr/bin/env bash
+#
+# this script authenticates with the local vault instance and downloads the key for a specific certificate
+#
+
+#
+# Usage:
+#       vault-get-cert <domain name>
+#
+
+if [[ -z "$1" ]]; then
+        echo "Missing certificate name"
+        echo "Usage:  `basename $0` '<certificate domain name>'"
+        exit 1
+fi
+CERT_NAME=$1
+
+if [[ -z "${VAULT_ADDR}" ]]; then
+        VAULT_ADDR=https://vault.dst.cloud
+fi
+
+# authenticate to Vault using AWS meta-data
+pkcs7=`curl -s http://169.254.169.254/latest/dynamic/instance-identity/pkcs7`
+vault_response=`curl -s -X POST "${VAULT_ADDR}/v1/auth/aws/login" \
+        -d "{\"nonce\": \"12345\", \"role\":\"ec2-instance-role\",\"pkcs7\":\"$(echo ${pkcs7} | tr -d '\n')\"}"`
+if [[ $? -ne 0 ]]; then
+        echo "Unable to authenticate with Vault.  return code $? -- ${vault_response}"
+        exit 1
+fi
+token=`echo ${vault_response} | jq .auth.client_token | sed -e 's/"//g'`
+
+# obtain the secret and print it on stdout
+curl -s --header "X-Vault-Token: ${token}" ${VAULT_ADDR}/v1/secret/certificates/${CERT_NAME} \
+    | jq .data.key | sed -e 's/"//g' -e 's/\\n/\n/g'
