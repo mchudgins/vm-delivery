@@ -118,7 +118,9 @@ SECURITY_GROUP=`aws --region ${REGION} ec2 describe-security-groups \
 # create the cloud-init user data
 USERDATA=$(cat <<-"_EOF_" | sed -e "s/REGION=xxx/REGION=${REGION}/" | base64 -w 0
 #! /usr/bin/env bash
+iptables-restore < /etc/iptables.conf
 systemctl start prometheus
+systemctl start promproxy
 _EOF_
 )
 
@@ -187,8 +189,8 @@ rm ${FILE}
 aws --region ${REGION} ec2 create-tags --resources ${instanceID} --tags Key=Name,Value=${IMAGE_STREAM}
 
 #display the instance's IP ADDR
-#ipaddr=`aws --region ${REGION} ec2 describe-instances --instance-ids ${instanceID} | jq .Reservations[0].Instances[0].PublicIpAddress`
-#echo Instance available at ${ipaddr}
+ipaddr=`aws --region ${REGION} ec2 describe-instances --instance-ids ${instanceID} | jq .Reservations[0].Instances[0].PublicIpAddress`
+echo Instance available at ${ipaddr}
 
 # update the DNS entry for this new instance of vault-seed-${REGION}.dstcorp.io
-#upsertDNS "vault-seed-${REGION}.dstcorp.io." ${ipaddr} ${instanceID}
+upsertDNS "prometheus.dstcorp.io." ${ipaddr} ${instanceID}

@@ -72,6 +72,11 @@ sudo mv /tmp/node-exporter.service /etc/systemd/system/node-exporter.service
 sudo systemctl daemon-reload
 sudo systemctl enable node-exporter
 
+# install the vault-get-cert app
+aws s3 cp s3://dstcorp/artifacts/vault-get-cert /tmp
+chmod +x /tmp/vault-get-cert
+sudo cp /tmp/vault-get-cert /usr/local/bin
+
 # clean up
 sudo apt-get autoremove
 #sudo apt-get clean
