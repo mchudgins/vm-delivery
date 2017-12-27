@@ -62,4 +62,15 @@ rm ${key}
 key=`mktemp`
 aws s3 cp s3://io.dstcorp.vault.o7t-alpha/ucap-ca.key ${key}
 vault write secret/CA/ucap-ca key=@${key}
+
+# set up vault as a CA for dst.cloud and dev.dstcorp.io
+vault mount -path ucap pki
+
+aws s3 cp s3://dstcorp/certificates/ucap-ca.pem /tmp
+cat ${key} >>/tmp/ucap-ca.pem
 rm ${key}
+vault write ucap/config/ca pem_bundle=@/tmp/ucap-ca.pem
+rm /tmp/ucap-ca.pem
+
+vault write ucap/config/urls issuing_certificates="${VAULT_ADDR}/v1/ucap/ca"
+vault write ucap/roles/dst-cloud allowed_domains="dst.cloud,dev.dstcorp.io" allow_subdomains=true ttl=720h max_ttl=2160h key_type=ec key_bits=224 no_store=true
