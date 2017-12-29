@@ -77,6 +77,68 @@ aws s3 cp s3://dstcorp/artifacts/vault-get-cert /tmp
 chmod +x /tmp/vault-get-cert
 sudo cp /tmp/vault-get-cert /usr/local/bin
 
+# install a cloud-watch-logs service
+# (see:  https://github.com/advantageous/systemd-cloud-watch and
+# https://github.com/saymedia/journald-cloudwatch-logs)
+
+# create a non-privileged vault user
+sudo adduser --system --home /var/lib/cloud-watch --gecos 'AWS Cloud Watch Agent,,,' --disabled-password cloud-watch
+# need privilege to read the systemd journal
+sudo adduser cloud-watch systemd-journal
+
+cat <<"EOF" >/tmp/cloud-watch.service
+[Unit]
+Description=journald-cloudwatch-logs
+Wants=basic.target
+After=basic.target network.target
+
+[Service]
+User=cloud-watch
+Group=nogroup
+ExecStart=/usr/local/bin/journald-cloudwatch-agent /etc/journald-cloudwatch-logs.conf
+KillMode=process
+Restart=on-failure
+RestartSec=42s
+
+[Install]
+WantedBy=multi-user.target
+EOF
+sudo mv /tmp/cloud-watch.service /etc/systemd/system
+sudo systemctl daemon-reload
+sudo systemctl enable cloud-watch.service
+
+aws s3 cp s3://dstcorp/artifacts/journald-cloud-watch /tmp/journald-cloudwatch-logs
+chmod +x /tmp/journald-cloudwatch-logs
+sudo cp /tmp/journald-cloudwatch-logs /usr/local/bin
+
+cat <<"EOF" >/tmp/journald-cloudwatch-logs.conf
+log_group = "syslog"
+log_stream = "${env.LOG_STREAM_NAME}"
+state_file = "/var/lib/cloud-watch/state"
+EOF
+sudo cp /tmp/journald-cloudwatch-logs.conf /etc
+
+cat <<"EOF" >/tmp/journald-cloudwatch-agent
+#! /usr/bin/env bash
+INSTANCE_NAME=null
+id=`curl -s http://169.254.169.254/latest/meta-data/instance-id`
+az=`curl -s http://169.254.169.254/latest/dynamic/instance-identity/document | jq -r .availabilityZone`
+region=`echo $az | sed -e 's/[a-z]$//'`
+
+# see if this instance has a Name tag. if so, use it in the name
+nameTag=`aws --region ${region} ec2 describe-instances --filters Name=instance-id,Values=$id \
+    | jq '.Reservations[0].Instances[0].Tags | from_entries.Name' | sed -e 's/"//g'`
+if [[ -z "${nameTag}" || "${nameTag}" == "null" ]]; then
+    export LOG_STREAM_NAME=${id}
+else
+    export LOG_STREAM_NAME="${nameTag}-`hostname`-${az}"
+fi
+
+exec /usr/local/bin/journald-cloudwatch-logs /etc/journald-cloudwatch-logs.conf
+EOF
+chmod +x /tmp/journald-cloudwatch-agent
+sudo cp /tmp/journald-cloudwatch-agent /usr/local/bin
+
 # clean up
 sudo apt-get autoremove
 #sudo apt-get clean
