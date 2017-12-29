@@ -65,6 +65,7 @@ vault write secret/CA/ucap-ca key=@${key}
 
 # set up vault as a CA for dst.cloud and dev.dstcorp.io
 vault mount -path ucap pki
+vault mount-tune -max-lease-ttl=2160h ucap
 
 aws s3 cp s3://dstcorp/certificates/ucap-ca.pem /tmp
 cat ${key} >>/tmp/ucap-ca.pem
