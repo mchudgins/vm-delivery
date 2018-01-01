@@ -412,6 +412,30 @@ Resources:
 # Security Groups
 #
 
+  # SecurityGroup for Spring Cloud Config Server
+  # anyone can talk to it!
+  rConfigServerSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub ${pVPCName}-configServer
+      GroupDescription: anyone can talk to the config server
+      VpcId: !Ref rVPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub ${pVPCName}-configServer
+        - Key: VPC
+          Value: !Ref pVPCName
+      SecurityGroupEgress:
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: 0.0.0.0/0
+
   rVaultSG:
     Type: AWS::EC2::SecurityGroup
     DependsOn:
@@ -455,6 +479,7 @@ Resources:
     - rVPC
     - rVPCS3Endpoint
     - rVaultSG
+    - rConfigServerSG
     Properties:
       GroupName: !Sub ${pVPCName}-master
       GroupDescription: Openshift Master access
@@ -469,6 +494,10 @@ Resources:
         FromPort: 443
         ToPort: 443
         DestinationSecurityGroupId: !Ref rVaultSG
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        DestinationSecurityGroupId: !Ref rConfigServerSG
       - IpProtocol: tcp
         FromPort: 443
         ToPort: 443
@@ -486,6 +515,7 @@ Resources:
     DependsOn:
     - rMasterSG
     - rVaultSG
+    - rConfigServerSG
     Properties:
       GroupName: !Sub ${pVPCName}-etcd
       GroupDescription: etcd access
@@ -504,6 +534,10 @@ Resources:
         FromPort: 443
         ToPort: 443
         DestinationPrefixListId: !FindInMap [ RegionMap, !Ref "AWS::Region", s3PrefixListId ]
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        DestinationSecurityGroupId: !Ref rConfigServerSG
       Tags:
         - Key: Name
           Value: !Sub ${pVPCName}-etcd
@@ -538,6 +572,7 @@ Resources:
     - rMasterSG
     - rEtcdSG
     - rVaultSG
+    - rConfigServerSG
     Properties:
       GroupName: !Sub ${pVPCName}-node
       GroupDescription: Openshift node access
@@ -576,6 +611,10 @@ Resources:
         FromPort: 443
         ToPort: 443
         DestinationPrefixListId: !FindInMap [ RegionMap, !Ref "AWS::Region", s3PrefixListId ]
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        DestinationSecurityGroupId: !Ref rConfigServerSG
       Tags:
         - Key: Name
           Value: !Sub ${pVPCName}-node
