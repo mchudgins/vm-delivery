@@ -828,6 +828,18 @@ Resources:
         - Key: VPC
           Value: !Ref pVPCName
 
+  rConfigServerToAWSEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    DependsOn:
+    - rConfigServerSG
+    - rAWSInterfaceSG
+    Properties:
+      GroupId: !Ref rConfigServerSG
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+      DestinationSecurityGroupId: !Ref rAWSInterfaceSG
+
   rVaultToAWSEgress:
     Type: AWS::EC2::SecurityGroupEgress
     DependsOn:
