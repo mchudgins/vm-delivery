@@ -6,8 +6,9 @@
 
 REGION=us-east-1
 INSTANCE_TYPE=t2.nano
+INSTANCE_ROLE=ec2ConfigServerRole
 KEY_NAME="kp201707"
-IMAGE_STREAM=dev
+IMAGE_STREAM=configServer
 CLUSTER_NAME=o7t-alpha
 
 #
@@ -110,7 +111,10 @@ NODE_EXPORTER_SECURITY_GROUP=`aws --region ${REGION} ec2 describe-security-group
 USERDATA=$(cat <<-"_EOF_" | sed -e "s/REGION=xxx/REGION=${REGION}/" | base64 -w 0
 #cloud-config
 runcmd:
- - docker run -d -e GIT_REPO_URL=https://github.com/mchudgins/config-props.git -p 80:8888 mchudgins/configserver:0.0.2-SNAPSHOT
+    - iptables-restore < /etc/iptables.conf
+#    - echo "GIT_REPO_URL=something" >/tmp/config-server
+    - echo "HELLO=WORLD" >/tmp/config-server
+    - cat /tmp/config-server >>/etc/default/config-server
 _EOF_
 )
 
@@ -127,7 +131,7 @@ cat <<EOF >${FILE}
     "InstanceType": "${INSTANCE_TYPE}",
     "InstanceInitiatedShutdownBehavior": "terminate",
     "IamInstanceProfile": {
-        "Name": "ec2PackerInstanceRole"
+        "Name": "${INSTANCE_ROLE}"
     },
     "EbsOptimized": ${EBS_OPTIMIZED},
     "Monitoring": {

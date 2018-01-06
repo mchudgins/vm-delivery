@@ -16,6 +16,9 @@ ubuntu.ami: aws-bake.json ubuntu/cloud-init.sh
 configGen.ami: ubuntu.ami aws-bake.json configGen/cloud-init.sh
 	bin/bake --parent $(shell cat ubuntu.ami) --image-stream configGen --description 'Cluster Config Generator based on Ubuntu' configGen/cloud-init.sh
 
+configServer.ami: ubuntu.ami aws-bake.json configServer/cloud-init.sh
+	bin/bake --parent $(shell cat ubuntu.ami) --image-stream configServer --description 'Spring Cloud Config Server based on Ubuntu' configServer/cloud-init.sh
+
 dev.ami: ubuntu.ami aws-bake.json dev/cloud-init.sh
 	bin/bake --parent $(shell cat ubuntu.ami) --image-stream dev --description 'Dev image based on Ubuntu' dev/cloud-init.sh
 

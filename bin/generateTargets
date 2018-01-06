@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 #echo ubuntu.ami dev.ami origin-master.ami
-targets="ubuntu configGen dev etcd master node prometheus vault"
+targets="ubuntu configGen configServer dev etcd master node prometheus vault"
 
 function mostRecentAMI {
     REGION="us-east-1"
