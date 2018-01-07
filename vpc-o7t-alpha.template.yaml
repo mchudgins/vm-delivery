@@ -425,16 +425,16 @@ Resources:
         FromPort: 443
         ToPort: 443
         CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: 127.0.0.1/32
       Tags:
         - Key: Name
           Value: !Sub ${pVPCName}-configServer
         - Key: VPC
           Value: !Ref pVPCName
-      SecurityGroupEgress:
-      - IpProtocol: tcp
-        FromPort: 443
-        ToPort: 443
-        CidrIp: 0.0.0.0/0
 
   rVaultSG:
     Type: AWS::EC2::SecurityGroup
@@ -797,11 +797,16 @@ Resources:
     - rNodeSG
     - rEtcdSG
     - rVaultSG
+    - rConfigServerSG
     Properties:
       GroupName: !Sub ${pVPCName}-aws
       GroupDescription: Access to AWS services
       VpcId: !Ref rVPC
       SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        SourceSecurityGroupId: !Ref rConfigServerSG
       - IpProtocol: tcp
         FromPort: 443
         ToPort: 443
