@@ -109,6 +109,19 @@ scrape_configs:
         target_label: instanceId
       - source_labels: [__meta_ec2_tag_availability_zone]
         target_label: AZ
+  - job_name: 'java'
+
+    ec2_sd_configs:
+    - region: ${REGION}
+      port: 9110
+
+    relabel_configs:
+      - source_labels: [__meta_ec2_tag_Name]
+        target_label: Name
+      - source_labels: [__meta_ec2_tag_instance_id]
+        target_label: instanceId
+      - source_labels: [__meta_ec2_tag_availability_zone]
+        target_label: AZ
 EOF_YML
 cp /tmp/prometheus.yml /usr/local/etc/prometheus
 fi
