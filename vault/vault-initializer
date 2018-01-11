@@ -26,6 +26,13 @@ path "secret/certificates/*" {
 EOF
 vault policy-write certificate-reader /tmp/certificate-policy.hcl
 
+cat <<EOF >/tmp/seed-policy.hcl
+path "secret/seed/*" {
+  capabilities = [ "read", "list"]
+}
+EOF
+vault policy-write seed-reader /tmp/seed-policy.hcl
+
 cat <<EOF >/tmp/ca-policy.hcl
 path "secret/certificates/*" {
   capabilities = [ "read", "write", "list"]
@@ -43,7 +50,7 @@ vpc_id=$(aws --region us-east-1 ec2 describe-instances --filters Name=instance-i
     | jq .Reservations[0].Instances[0].NetworkInterfaces[0].VpcId | sed -e 's/"//g')
 
 vault auth-enable aws
-vault write auth/aws/role/ec2-instance-role auth_type=ec2 policies=certificate-reader bound_vpc_id=${vpc_id} max_ttl=5m
+vault write auth/aws/role/ec2-instance-role auth_type=ec2 policies=certificate-reader,seed-reader bound_vpc_id=${vpc_id} max_ttl=5m
 vault write auth/aws/role/ca-role auth_type=ec2 policies=ca bound_ami_id=${ami_id} max_ttl=5m
 
 #
@@ -62,6 +69,16 @@ rm ${key}
 key=`mktemp`
 aws s3 cp s3://io.dstcorp.vault.o7t-alpha/ucap-ca.key ${key}
 vault write secret/CA/ucap-ca key=@${key}
+
+# set up the CodeCommit password for the configServer seed
+key=`mktemp`
+aws s3 cp s3://io.dstcorp.vault.o7t-alpha/configServer.pword ${key}
+vault write secret/seed/configServerCodeCommit password=@${key}
+
+# set up the configServer x509 key
+key=`mktemp`
+aws s3 cp s3://io.dstcorp.vault.o7t-alpha/config.dst.cloud.key ${key}
+vault write secret/certificates/config.dst.cloud key=@${key}
 
 # set up vault as a CA for dst.cloud and dev.dstcorp.io
 vault mount -path ucap pki
