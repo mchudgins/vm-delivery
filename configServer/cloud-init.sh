@@ -17,7 +17,7 @@ echo 'Starting Package Installations'
 # Getting a spring config loading issue with Java 9, reverted to Java 8
 #
 sudo apt-get install -yq --no-install-recommends \
-  apt-transport-https build-essential openjdk-8-jre-headless
+  apt-transport-https openjdk-8-jre-headless
 
 # create a non-privileged user
 sudo adduser --system --home /var/lib/config-server --gecos 'Spring Cloud Config Server,,,' --disabled-password config-server
@@ -82,16 +82,66 @@ if [[ ! -d target/config ]]; then
 	mkdir -p target/config
 fi
 
-# download a certificate & key for the service
-/usr/local/bin/vault-get-cert config.dst.cloud > /tmp/key.pem
+# the config server needs a java keystore which contains its x509 cert & key
+if [[ ! -f /usr/local/etc/config-server/keystore.p12 ]]; then
+    echo "Creating java keystore for config server"
+
+    # generate 32 random alpha-numeric characters as a key for the keystore
+    # and save it in /usr/local/etc/config-server/jks.key
+    export JKS_KEY=`tr -dc _A-Z-a-z-0-9 </dev/urandom 2>/dev/null | head -c${1:-32}`
+    echo ${JKS_KEY} >/usr/local/etc/config-server/jks.key
+    chmod go-rw /usr/local/etc/config-server/jks.key
+
+    # assemble the cert & key before constructing the jks
+
+    # download a certificate & key for the service
+    aws s3 cp s3://dstcorp/certificates/config.dst.cloud.pem /usr/local/etc/config-server
+    if [[ $? -ne 0 ]]; then
+        echo "Unable to download pem file (s3://dstcorp/certificates/config.dst.cloud.pem)"
+        exit 1
+    fi
+
+    # fetch the key
+    export x509key="$(/usr/local/bin/vault-get-cert config.dst.cloud)"
+    if [[ $? -ne 0 ]]; then
+        echo "Unable to obtain private key from vault"
+        exit 2
+    fi
+
+    # TODO: pkcs12 is 'supposed' to read the concatenated pem file from stdin, but doesn't.
+    # so we're creating a temporary file with the key in it (ugh).
+    tmpfile=`mktemp`
+    printenv x509key | cat /usr/local/etc/config-server/config.dst.cloud.pem - >${tmpfile}
+
+    # create the keystore
+    openssl pkcs12 -export -in ${tmpfile} -out /usr/local/etc/config-server/keystore.p12 \
+        -name config-server -passout env:JKS_KEY
+
+    rm ${tmpfile}
+    chmod go-rw /usr/local/etc/config-server/keystore.p12
+
+    echo "keystore created."
+fi
+
+JKS_KEY=`cat /usr/local/etc/config-server/jks.key`
 
 echo /usr/bin/java ${APPFLAGS} \
-	-Dspring.cloud.config.server.git.uri=${GIT_REPO_URL} \
+    -Dserver.port=8443 \
+    -Dserver.ssl.key-store=file:///usr/local/etc/config-server/keystore.p12 \
+    -Dserver.ssl.key-store-password='<redacted>' \
+    -Dserver.ssl.keyStoreType=PKCS12 \
+    -Dserver.ssl.keyAlias=config-server \
+    -Dspring.cloud.config.server.git.uri=${GIT_REPO_URL} \
 	-Dspring.cloud.config.server.git.username=${GIT_REPO_UID} \
 	-Dspring.cloud.config.server.git.password='<redacted>' \
 	-javaagent:/usr/local/bin/jmx_prometheus_javaagent-0.2.0.jar=9110:/usr/local/etc/config-server/jmx-exporter.yaml \
 	-jar ${APPJAR}
 exec /usr/bin/java ${APPFLAGS} \
+    -Dserver.port=8443 \
+    -Dserver.ssl.key-store=file:///usr/local/etc/config-server/keystore.p12 \
+    -Dserver.ssl.key-store-password=${JKS_KEY} \
+    -Dserver.ssl.keyStoreType=PKCS12 \
+    -Dserver.ssl.keyAlias=config-server \
 	-Dspring.cloud.config.server.git.uri=${GIT_REPO_URL} \
 	-Dspring.cloud.config.server.git.username=${GIT_REPO_UID} \
 	-Dspring.cloud.config.server.git.password=${GIT_REPO_PWORD} \
@@ -115,7 +165,7 @@ sudo -u config-server cp /tmp/jmx-exporter.yaml /usr/local/etc/config-server
 
 # route requests for port 80 to listener on port 8888
 # note: need to save iptables across reboots via ifconfig up/down
-sudo iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 8888
+sudo iptables -t nat -A PREROUTING -p tcp --dport 443 -j REDIRECT --to-port 8443
 sudo iptables-save >/tmp/iptables.conf
 sudo cp /tmp/iptables.conf /etc
 cat <<"EOF" >/tmp/iptables
