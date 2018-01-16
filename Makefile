@@ -39,6 +39,10 @@ prometheus.ami: ubuntu.ami aws-bake.json prometheus/cloud-init.sh
 	bin/bake --parent $(shell cat ubuntu.ami) --image-stream prometheus --artifact-version 2.0.0 \
    		--description 'Prometheus based on Ubuntu 17.10' prometheus/cloud-init.sh
 
+squid.ami: ubuntu.ami aws-bake.json squid/cloud-init.sh
+	bin/bake --parent $(shell cat ubuntu.ami) --image-stream squid --artifact-version 3.5.27 \
+   		--description 'Squid Proxy based on Ubuntu 17.10' squid/cloud-init.sh
+
 vault.ami: ubuntu.ami aws-bake.json vault/cloud-init.sh
 	bin/bake --parent $(shell cat ubuntu.ami) --image-stream vault --artifact-version 0.9.1 \
    		--description 'Hashicorp Vault based on Ubuntu 17.10' vault/cloud-init.sh
