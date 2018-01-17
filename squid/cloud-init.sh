@@ -106,6 +106,53 @@ EOF
 sudo systemctl daemon-reload
 sudo systemctl enable squid
 
+#
+# setup a cron job to look for configuration changes that should be applied to squid.conf
+#
+cat | sudo tee /usr/local/bin/squid-cfg-monitor <<"EOF"
+#! /usr/bin/env bash
+#
+# /usr/local/bin/squid-cfg-monitor
+#
+# this script checks with the config server for the current version of
+# /etc/squid/squid.conf.  if changes are found, the new config is installed and squid reloaded.
+#
+
+if [[ -s /etc/default/squid-cfg-monitor ]]; then
+    . /etc/default/squid-cfg-monitor
+fi
+
+# if we don't know the cluster's name, we can't get the config.
+# so squid can just keep running with it's original config.
+if [[ -z "${CLUSTER_NAME}" ]]; then
+    exit 0
+fi
+
+curl -s https://config.dst.cloud/${CLUSTER_NAME}/default/master/${CLUSTER_NAME}/squid/squid.conf >/tmp/squid.conf
+
+if [[ ! -s /tmp/squid.conf ]]; then
+    # no config found
+    exit 0
+fi
+
+squid diff /etc/squid/squid.conf /tmp/squid.conf
+if [[ $? -ne 0 ]]; then
+fi
+
+
+EOF
+sudo chmod +x /usr/local/bin/squid-cfg-monitor
+
+# register the shell script as a cron job
+cat | sudo tee /etc/cron.d/squid-cfg-monitor
+#
+# cron.d/squid-cfg-monitor
+#
+# updates /etc/squid/squid.conf with changes from the config server
+#
+*/5 * * * * /usr/local/bin/squid-cfg-monitor
+EOF
+
 # route requests for port 80 to listener on port 8888
 # note: need to save iptables across reboots via ifconfig up/down
 sudo iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 3129
