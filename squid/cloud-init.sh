@@ -49,6 +49,10 @@ wget ${SQUID_ARCHIVE} \
 cat | sudo tee /etc/squid/squid.conf <<EOF
 visible_hostname squid
 
+# Add this port to the config to eliminate spurious error messages.
+# we won't permit access to it in the SecurityGroup definition, so it's ok
+http_port 3128
+
 #Handling HTTP requests
 http_port 3129 intercept
 acl allowed_http_sites dstdomain .amazonaws.com
@@ -86,19 +90,18 @@ sudo chown -R squid /etc/squid
 cat | sudo tee /etc/systemd/system/squid.service <<"EOF"
 [Unit]
 Description=Squid Proxy service
+Documentation=man:squid(8)
 Wants=basic.target
 After=basic.target network.target
 
 [Service]
 WorkingDirectory=/var/lib/squid
-User=squid
-Group=nogroup
-ExecStart=/usr/sbin/squid
+Type=forking
+PIDFile=/var/run/squid.pid
+#ExecStartPre=/usr/sbin/squid --foreground -z
+ExecStart=/usr/sbin/squid -sYC
 ExecReload=/bin/kill -HUP $MAINPID
-KillMode=process
-Restart=on-failure
-RestartPreventExitStatus=255
-Type=simple
+KillMode=mixed
 
 [Install]
 WantedBy=multi-user.target
@@ -109,6 +112,8 @@ sudo systemctl enable squid
 #
 # setup a cron job to look for configuration changes that should be applied to squid.conf
 #
+
+# first, create the script launched by cron
 cat | sudo tee /usr/local/bin/squid-cfg-monitor <<"EOF"
 #! /usr/bin/env bash
 #
@@ -135,22 +140,27 @@ if [[ ! -s /tmp/squid.conf ]]; then
     exit 0
 fi
 
-squid diff /etc/squid/squid.conf /tmp/squid.conf
+diff /etc/squid/squid.conf /tmp/squid.conf
 if [[ $? -ne 0 ]]; then
-fi
+    logger -t squid-cfg-monitor "Changes detected in squid configuration."
+    cp /tmp/squid.conf /etc/squid/squid.conf
+    chown squid /etc/squid/squid.conf
+    chmod 640 /etc/squid/squid.conf
+    systemctl reload squid
 
+fi
 
 EOF
 sudo chmod +x /usr/local/bin/squid-cfg-monitor
 
-# register the shell script as a cron job
-cat | sudo tee /etc/cron.d/squid-cfg-monitor
+# second, register the shell script as a cron job
+cat | sudo tee /etc/cron.d/squid-cfg-monitor <<EOF
 #
 # cron.d/squid-cfg-monitor
 #
 # updates /etc/squid/squid.conf with changes from the config server
 #
-*/5 * * * * /usr/local/bin/squid-cfg-monitor
+*/5 * * * * root /usr/local/bin/squid-cfg-monitor
 EOF
 
 # route requests for port 80 to listener on port 8888

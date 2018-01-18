@@ -75,7 +75,7 @@ AWSDATA=`aws ec2 describe-subnets --filters Name=tag:Name,Values=${SUBNET_NAME}`
 SUBNET=`echo ${AWSDATA} | jq .Subnets[0].SubnetId | sed -s 's/"//g'`
 VPC=`echo ${AWSDATA} | jq .Subnets[0].VpcId | sed -s 's/"//g'`
 CIDR=`echo ${AWSDATA} | jq .Subnets[0].CidrBlock | sed -e 's^.0/24^^' -e 's/"//g'`
-NODE_IP="${CIDR}.10"
+NODE_IP="${CIDR}.11"
 echo SUBNET=${SUBNET} VPC=${VPC}
 if [[ -z "${SUBNET}" || "${SUBNET}" == "null" ]]; then
     echo "Unable to find the private subnet (${SUBNET_NAME}) within the cluster"
@@ -137,6 +137,9 @@ cat <<EOF >${FILE}
     "Monitoring": {
         "Enabled": false
     },
+    "IamInstanceProfile": {
+        "Name": "ec2PackerInstanceRole"
+    },
     "NetworkInterfaces": [
       {
         "AssociatePublicIpAddress": true,
@@ -178,12 +181,21 @@ case "${el[0]}" in
 esac
 
 echo instanceID ${instanceID}
-
+echo "sleep 60 seconds to let things bake..."
+sleep 60
 rm ${FILE}
 
 #tag the instance
 aws --region ${REGION} ec2 create-tags --resources ${instanceID} --tags Key=Name,Value="squid-${SUBNET_NAME}"
 
-# add the squid instance to the private subnet's route table
-echo "Remember to add the squid proxy to the private subnet's route table"
+#change the source/dest check to off
+deviceId=`aws ec2 describe-instances --filter Name=instance-id,Values=${instanceID} | \
+    jq -r .Reservations[0].Instances[0].NetworkInterfaces[0].NetworkInterfaceId`
+aws ec2 modify-network-interface-attribute --network-interface-id ${deviceId} --no-source-dest-check
 
+#add the device as a route in the private network
+rt=`aws ec2 describe-route-tables --filters Name="tag:Name",Values="o7t-alpha-private" | jq -r .RouteTables[0].RouteTableId`
+aws ec2 replace-route \
+    --route-table-id ${rt} \
+    --instance-id ${instanceID} \
+    --destination-cidr-block '0.0.0.0/0'
