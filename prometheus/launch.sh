@@ -118,6 +118,7 @@ SECURITY_GROUP=`aws --region ${REGION} ec2 describe-security-groups \
 # create the cloud-init user data
 USERDATA=$(cat <<-"_EOF_" | sed -e "s/REGION=xxx/REGION=${REGION}/" | base64 -w 0
 #! /usr/bin/env bash
+echo "CLUSTER_NAME=mch" >/etc/default/prom-cfg-monitor
 iptables-restore < /etc/iptables.conf
 systemctl start prometheus
 systemctl start promproxy

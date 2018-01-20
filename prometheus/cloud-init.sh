@@ -1,6 +1,6 @@
 #! /bin/bash
 
-PROM_VERSION="2.0.0"
+PROM_VERSION="2.1.0"
 PROM_ARTIFACT="s3://dstcorp/artifacts/prometheus-${PROM_VERSION}.linux-amd64.tar.gz"
 
 # hmmmm, need to set the hostname to something the AWS DNS server knows
@@ -109,6 +109,7 @@ scrape_configs:
         target_label: instanceId
       - source_labels: [__meta_ec2_tag_availability_zone]
         target_label: AZ
+
   - job_name: 'java'
 
     ec2_sd_configs:
@@ -174,6 +175,61 @@ iptables-restore < /etc/iptables.conf
 EOF
 chmod +x /tmp/iptables
 sudo cp /tmp/iptables /etc/network/if-up.d/iptables
+
+#
+# setup a cron job to look for configuration changes that should be applied to /usr/local/etc/prometheus/prometheus.yml
+#
+
+# first, create the script launched by cron
+cat | sudo tee /usr/local/bin/prom-cfg-monitor <<"EOF"
+#! /usr/bin/env bash
+#
+# /usr/local/bin/prom-cfg-monitor
+#
+# this script checks with the config server for the current version of
+# /usr/local/etc/prometheus/prometheus.yml.  if changes are found,
+# the new config is installed and prometheus reloaded.
+#
+
+if [[ -s /etc/default/prom-cfg-monitor ]]; then
+    . /etc/default/prom-cfg-monitor
+fi
+
+# if we don't know the cluster's name, we can't get the config.
+# so prometheus can just keep running with it's original config.
+if [[ -z "${CLUSTER_NAME}" ]]; then
+    exit 0
+fi
+
+curl -s https://config.dst.cloud/${CLUSTER_NAME}/default/master/${CLUSTER_NAME}/prometheus.yml >/tmp/prometheus.yml
+
+if [[ ! -s /tmp/prometheus.yml ]]; then
+    # no config found
+    exit 0
+fi
+
+diff /usr/local/etc/prometheus/prometheus.yml /tmp/prometheus.yml
+if [[ $? -ne 0 ]]; then
+    logger -t prom-cfg-monitor "Changes detected in prometheus configuration."
+    cp /tmp/prometheus.yml /usr/local/etc/prometheus/prometheus.yml
+    chown prometheus /usr/local/etc/prometheus/prometheus.yml
+    chmod 640 /usr/local/etc/prometheus/prometheus.yml
+    systemctl reload prometheus
+
+fi
+
+EOF
+sudo chmod +x /usr/local/bin/prom-cfg-monitor
+
+# second, register the shell script as a cron job
+cat | sudo tee /etc/cron.d/prom-cfg-monitor <<EOF
+#
+# cron.d/prom-cfg-monitor
+#
+# updates /usr/local/etc/prometheus/prometheus.yml with changes from the config server
+#
+*/15 * * * * root /usr/local/bin/prom-cfg-monitor
+EOF
 
 # clean up
 rm -r /tmp/*
