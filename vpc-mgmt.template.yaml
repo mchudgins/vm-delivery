@@ -1,0 +1,673 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: 'Provides networking configuration for DST, per Region, Mgmt VPC with NACL rules (qs-1nb14cqcl).'
+Metadata:
+    AWS::CloudFormation::Interface:
+        ParameterGroups:
+          - Label:
+                default: VPC Configuration
+            Parameters:
+              - pVPCCIDR
+              - pPublicCIDR
+              - pPrivateCIDR
+              - pAZ
+              - pVPCTenancy
+        ParameterLabels:
+            pVPCCIDR:
+                default: VPC CIDR block
+            pPublicCIDR:
+                default: Managment Subnet Public CIDR
+            pPrivateCIDR:
+                default: Managment Subnet Private CIDR
+            pAZ:
+                default: Availability Zone
+            pEnvironment:
+                default: Environment
+            pOwner:
+                default: Owner
+
+Parameters:
+    pVPCCIDR:
+        Description: CIDR block for Production VPC
+        Type: String
+        Default: 10.254.0.0/16
+    pPublicCIDR:
+#        Description: CIDR block for Management subnet
+        Type: String
+        Default: 10.254.250.0/24
+    pPrivateCIDR:
+#        Description: CIDR block for Management subnet
+        Type: String
+        Default: 10.254.255.0/24
+    pVPCTenancy:
+        Description: Instance tenancy behavior for this VPC
+        Type: String
+        Default: default
+        AllowedValues:
+          - default
+    pEnvironment:
+        Description: Environment (alpha, CI/CD, or development)
+        Type: String
+        Default: prod
+        AllowedValues:
+          - alpha
+          - development
+          - prod
+    pAZ:
+        Description: Availability Zone
+        Type: AWS::EC2::AvailabilityZone::Name
+        Default: us-east-1e
+    pOwner:
+        Description: "somebody@dstsystems.com"
+        Type: String
+        AllowedPattern: ".*@dstsystems.com"
+
+Mappings:
+  RegionMap:
+    us-east-1:
+      s3PrefixListId: pl-63a5400a
+    us-east-2:
+      s3PrefixListId: pl-7ba54012
+    us-west-1:
+      s3PrefixListId: pl-6ba54002
+    us-west-2:
+      s3PrefixListId: pl-68a54001
+
+Resources:
+  rDHCPOptions:
+    Type: AWS::EC2::DHCPOptions
+    Properties:
+      DomainName: dst.cloud
+      DomainNameServers:
+      - AmazonProvidedDNS
+
+  rVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref pVPCCIDR
+      InstanceTenancy: !Ref pVPCTenancy
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+      - Key: Name
+        Value: !Sub DST-Mgmt-${pEnvironment}
+      - Key: Environment
+        Value: !Ref pEnvironment
+      - Key: StackName
+        Value: !Ref AWS::StackName
+      - Key: Owner
+        Value: !Ref pOwner
+
+  rVPCDHCPOptionsAssociation:
+    Type: AWS::EC2::VPCDHCPOptionsAssociation
+    DependsOn: rVPC
+    Properties:
+      VpcId:
+        Ref: rVPC
+      DhcpOptionsId:
+        Ref: rDHCPOptions
+
+  rIGWProd:
+      Type: AWS::EC2::InternetGateway
+      Properties:
+          Tags:
+            - Key: Name
+              Value: DST-mgmt
+            - Key: Environment
+              Value: !Ref pEnvironment
+            - Key: Owner
+              Value: !Ref pOwner
+
+  rGWAttachmentProdIGW:
+      Type: AWS::EC2::VPCGatewayAttachment
+      DependsOn:
+      - rIGWProd
+      - rVPC
+      Properties:
+          VpcId: !Ref rVPC
+          InternetGatewayId: !Ref rIGWProd
+
+  rRouteTableMain:
+      Type: AWS::EC2::RouteTable
+      DependsOn: rVPC
+      Properties:
+          VpcId: !Ref rVPC
+          Tags:
+            - Key: Name
+              Value: DST-mgmt-public
+
+  rRouteProdIGW:
+      Type: AWS::EC2::Route
+      DependsOn:
+      - rGWAttachmentProdIGW
+      - rRouteTableMain
+      Properties:
+          RouteTableId: !Ref rRouteTableMain
+          GatewayId: !Ref rIGWProd
+          DestinationCidrBlock: 0.0.0.0/0
+
+  rRouteTablePrivate:
+      Type: AWS::EC2::RouteTable
+      DependsOn: rVPC
+      Properties:
+          VpcId: !Ref rVPC
+          Tags:
+            - Key: Name
+              Value: DST-mgmt-private
+
+#
+# allow access to AWS endpoints like S3 and EC2
+# from within all subnets
+#
+
+  rVPCS3Endpoint:
+    Type: "AWS::EC2::VPCEndpoint"
+    DependsOn:
+    - rVPC
+    - rRouteTableMain
+    - rRouteTablePrivate
+    Properties:
+      RouteTableIds:
+        - !Ref rRouteTableMain
+        - !Ref rRouteTablePrivate
+      ServiceName:
+        !Sub "com.amazonaws.${AWS::Region}.s3"
+      VpcId: !Ref rVPC
+
+  # this doesn't work in Cloudformation, ec2 is an "interface" and requires a "PrivateLink"
+#  rVPCEc2Endpoint:
+#    Type: "AWS::EC2::VPCEndpoint"
+#    DependsOn:
+#    - rVPC
+#    - rRouteTableMain
+#    - rRouteTablePrivate
+#    Properties:
+#      RouteTableIds:
+#        - !Ref rRouteTableMain
+#        - !Ref rRouteTablePrivate
+#      ServiceName:
+#        !Sub "com.amazonaws.${AWS::Region}.ec2"
+#      VpcId: !Ref rVPC
+
+#
+# Create a public Management subnet.
+# The subnet contains the vpc endpoints for AWS services, so
+# the NACLs need to permit external ip addresses
+#
+
+  rPublicSubnet:
+    Type: AWS::EC2::Subnet
+    DependsOn: rVPC
+    Properties:
+        AvailabilityZone: !Ref pAZ
+        CidrBlock: !Ref pPublicCIDR
+        MapPublicIpOnLaunch: false
+        Tags:
+          - Key: Name
+            Value: !Sub DST-mgmt-public
+          - Key: Owner
+            Value: !Ref pOwner
+        VpcId: !Ref rVPC
+
+  rPublicRouteAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    DependsOn:
+    - rPublicSubnet
+    - rRouteTableMain
+    Properties:
+      RouteTableId: !Ref rRouteTableMain
+      SubnetId: !Ref rPublicSubnet
+
+  #
+  # Network ACL Definition for the Public Subnet
+  #
+
+  rACLPublic:
+    Type: AWS::EC2::NetworkAcl
+    DependsOn: rVPC
+    Properties:
+      VpcId: !Ref rVPC
+      Tags:
+      - Key: Name
+        Value: DST-mgmt-public
+      - Key: VPC
+        Value: DST-mgmt
+      - Key: Owner
+        Value: !Ref pOwner
+
+  # any return traffic to linux ephemeral ports anywhere is permitted
+  rACLPublicRuleEgress100:
+    Type: "AWS::EC2::NetworkAclEntry"
+    DependsOn: rACLPublic
+    Properties:
+      CidrBlock: 0.0.0.0/0
+      Egress: true
+      NetworkAclId: !Ref rACLPublic
+      PortRange:
+        From: 32768
+        To: 60999
+      Protocol: 6
+      RuleAction: allow
+      RuleNumber: 100
+
+  # any access outbound to a 443 port anywhere is permitted
+  rACLPublicRuleEgress200:
+    Type: "AWS::EC2::NetworkAclEntry"
+    DependsOn: rACLPublic
+    Properties:
+      CidrBlock: 0.0.0.0/0
+      Egress: true
+      NetworkAclId: !Ref rACLPublic
+      PortRange:
+        From: 443
+        To: 443
+      Protocol: 6
+      RuleAction: allow
+      RuleNumber: 200
+
+  # any access outbound to an 80 port anywhere is permitted
+  rACLPublicRuleEgress300:
+    Type: "AWS::EC2::NetworkAclEntry"
+    DependsOn: rACLPublic
+    Properties:
+      CidrBlock: 0.0.0.0/0
+      Egress: true
+      NetworkAclId: !Ref rACLPublic
+      PortRange:
+        From: 80
+        To: 80
+      Protocol: 6
+      RuleAction: allow
+      RuleNumber: 300
+
+  # any access outbound to a SSH port in 10.0.0.0/8 is permitted
+  rACLPublicRuleEgress400:
+    Type: "AWS::EC2::NetworkAclEntry"
+    DependsOn: rACLPublic
+    Properties:
+      CidrBlock: 10.0.0.0/8
+      Egress: true
+      NetworkAclId: !Ref rACLPublic
+      PortRange:
+        From: 22
+        To: 22
+      Protocol: 6
+      RuleAction: allow
+      RuleNumber: 400
+
+  # SSH in, from anywhere
+  rACLPublicRule100:
+    Type: "AWS::EC2::NetworkAclEntry"
+    DependsOn: rACLPublic
+    Properties:
+      CidrBlock: 0.0.0.0/0
+      Egress: false
+      NetworkAclId: !Ref rACLPublic
+      PortRange:
+        From: 22
+        To: 22
+      Protocol: 6
+      RuleAction: allow
+      RuleNumber: 100
+
+  # HTTP in, from anywhere
+  rACLPublicRule200:
+    Type: "AWS::EC2::NetworkAclEntry"
+    DependsOn: rACLPublic
+    Properties:
+      CidrBlock: 0.0.0.0/0
+      Egress: false
+      NetworkAclId: !Ref rACLPublic
+      PortRange:
+        From: 80
+        To: 80
+      Protocol: 6
+      RuleAction: allow
+      RuleNumber: 200
+
+  # HTTPS in, from anywhere
+  rACLPublicRule300:
+    Type: "AWS::EC2::NetworkAclEntry"
+    DependsOn: rACLPublic
+    Properties:
+      CidrBlock: 0.0.0.0/0
+      Egress: false
+      NetworkAclId: !Ref rACLPublic
+      PortRange:
+        From: 443
+        To: 443
+      Protocol: 6
+      RuleAction: allow
+      RuleNumber: 300
+
+  # Prometheus node monitoring in, from the private subnet
+  rACLPublicRule400:
+    Type: "AWS::EC2::NetworkAclEntry"
+    DependsOn: rACLPublic
+    Properties:
+      CidrBlock: !Ref pPrivateCIDR
+      Egress: false
+      NetworkAclId: !Ref rACLPublic
+      PortRange:
+        From: 9100
+        To: 9100
+      Protocol: 6
+      RuleAction: allow
+      RuleNumber: 400
+
+  # Prometheus JMX monitoring in, from the private subnet
+  rACLPublicRule500:
+    Type: "AWS::EC2::NetworkAclEntry"
+    DependsOn: rACLPublic
+    Properties:
+      CidrBlock: !Ref pPrivateCIDR
+      Egress: false
+      NetworkAclId: !Ref rACLPublic
+      PortRange:
+        From: 9110
+        To: 9110
+      Protocol: 6
+      RuleAction: allow
+      RuleNumber: 500
+
+  rPublicSubnetACLAssociation:
+    Type: "AWS::EC2::SubnetNetworkAclAssociation"
+    DependsOn:
+    - rACLPublic
+    - rPublicSubnet
+    Properties:
+      SubnetId: !Ref rPublicSubnet
+      NetworkAclId: !Ref rACLPublic
+
+#
+# Create a private Management subnet.
+# The subnet contains the vpc endpoints for AWS services, so
+# the NACLs need to permit external ip addresses
+#
+
+  rPrivateSubnet:
+    Type: AWS::EC2::Subnet
+    DependsOn: rVPC
+    Properties:
+        AvailabilityZone: !Ref pAZ
+        CidrBlock: !Ref pPrivateCIDR
+        MapPublicIpOnLaunch: false
+        Tags:
+          - Key: Name
+            Value: DST-mgmt-private
+        VpcId: !Ref rVPC
+
+  rPrivateRouteAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    DependsOn:
+    - rPrivateSubnet
+    - rRouteTablePrivate
+    Properties:
+      RouteTableId: !Ref rRouteTablePrivate
+      SubnetId: !Ref rPrivateSubnet
+
+  #
+  # Network ACL Definition for the Private Subnet
+  #
+
+  rACLPrivate:
+    Type: AWS::EC2::NetworkAcl
+    DependsOn: rVPC
+    Properties:
+      VpcId: !Ref rVPC
+      Tags:
+      - Key: Name
+        Value: DST-mgmt-private
+      - Key: VPC
+        Value: DST-mgmt
+      - Key: Owner
+        Value: !Ref pOwner
+
+
+  # the private subnet is front'ed by proxies in the public subnet
+  # any return traffic to linux ephemeral ports in the public subnet is permitted
+  rACLPrivateRuleEgress100:
+    Type: "AWS::EC2::NetworkAclEntry"
+    DependsOn: rACLPrivate
+    Properties:
+      CidrBlock: !Ref pPublicCIDR
+      Egress: true
+      NetworkAclId: !Ref rACLPrivate
+      PortRange:
+        From: 32768
+        To: 60999
+      Protocol: 6
+      RuleAction: allow
+      RuleNumber: 100
+
+  # any access outbound to a 443 port anywhere is permitted
+  # (this traffic will be routed out via a proxy which will enforce whitelisted domain names)
+  rACLPrivateRuleEgress200:
+    Type: "AWS::EC2::NetworkAclEntry"
+    DependsOn: rACLPrivate
+    Properties:
+      CidrBlock: 0.0.0.0/0
+      Egress: true
+      NetworkAclId: !Ref rACLPrivate
+      PortRange:
+        From: 443
+        To: 443
+      Protocol: 6
+      RuleAction: allow
+      RuleNumber: 200
+
+  # any access outbound to a prometheus instrumentation port 9100
+  rACLPrivateRuleEgress300:
+    Type: "AWS::EC2::NetworkAclEntry"
+    DependsOn: rACLPrivate
+    Properties:
+      CidrBlock: 10.0.0.0/8
+      Egress: true
+      NetworkAclId: !Ref rACLPrivate
+      PortRange:
+        From: 9100
+        To: 9100
+      Protocol: 6
+      RuleAction: allow
+      RuleNumber: 300
+
+  # any access outbound to a prometheus instrumentation port 9110
+  rACLPrivateRuleEgress400:
+    Type: "AWS::EC2::NetworkAclEntry"
+    DependsOn: rACLPrivate
+    Properties:
+      CidrBlock: 10.0.0.0/8
+      Egress: true
+      NetworkAclId: !Ref rACLPrivate
+      PortRange:
+        From: 9110
+        To: 9110
+      Protocol: 6
+      RuleAction: allow
+      RuleNumber: 400
+
+  # SSH in, from bastions in the public subnet
+  rACLPrivateRule100:
+    Type: "AWS::EC2::NetworkAclEntry"
+    DependsOn: rACLPrivate
+    Properties:
+      CidrBlock: !Ref pPublicCIDR
+      Egress: false
+      NetworkAclId: !Ref rACLPrivate
+      PortRange:
+        From: 22
+        To: 22
+      Protocol: 6
+      RuleAction: allow
+      RuleNumber: 100
+
+  # HTTPS in, from the public subnet
+  rACLPrivateRule300:
+    Type: "AWS::EC2::NetworkAclEntry"
+    DependsOn: rACLPrivate
+    Properties:
+      CidrBlock: !Ref pPublicCIDR
+      Egress: false
+      NetworkAclId: !Ref rACLPrivate
+      PortRange:
+        From: 443
+        To: 443
+      Protocol: 6
+      RuleAction: allow
+      RuleNumber: 300
+
+  rPrivateSubnetACLAssociation:
+    Type: "AWS::EC2::SubnetNetworkAclAssociation"
+    DependsOn:
+    - rACLPrivate
+    - rPrivateSubnet
+    Properties:
+      SubnetId: !Ref rPrivateSubnet
+      NetworkAclId: !Ref rACLPrivate
+
+#
+# Security Groups
+#
+
+  # the HA proxy in the public subnet
+  rHAProxySG:
+    Type: AWS::EC2::SecurityGroup
+    DependsOn:
+    - rVPC
+    Properties:
+      GroupName: DST-mgmt-haproxy
+      GroupDescription: anyone can talk to the proxy server
+      VpcId: !Ref rVPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: DST-mgmt-haproxy
+        - Key: Owner
+          Value: !Ref pOwner
+
+  # SecurityGroup for Spring Cloud Config Server, Vault, Prometheus
+  # the HA proxy can talk to it
+  rHAProxyBackendSG:
+    Type: AWS::EC2::SecurityGroup
+    DependsOn:
+    - rVPC
+    Properties:
+      GroupName: DST-mgmt-haproxy-backend
+      GroupDescription: only the haproxy can talk to me
+      VpcId: !Ref rVPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        SourceSecurityGroupId: !Ref rHAProxySG
+      Tags:
+        - Key: Name
+          Value: DST-mgmt-haproxy-backend
+        - Key: Owner
+          Value: !Ref pOwner
+
+  rNodeExporterSG:
+    Type: AWS::EC2::SecurityGroup
+    DependsOn:
+    - rVPC
+    Properties:
+      GroupName: DST-mgmt-node-exporter
+      GroupDescription: only prometheus can talk to me
+      VpcId: !Ref rVPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 9100
+        ToPort: 9100
+        SourceSecurityGroupId: !Ref rHAProxyBackendSG
+      Tags:
+        - Key: Name
+          Value: DST-mgmt-node-exporter
+        - Key: Owner
+          Value: !Ref pOwner
+
+  rJMXExporterSG:
+    Type: AWS::EC2::SecurityGroup
+    DependsOn:
+    - rVPC
+    Properties:
+      GroupName: DST-mgmt-jmx-exporter
+      GroupDescription: only prometheus can talk to me
+      VpcId: !Ref rVPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 9110
+        ToPort: 9110
+        SourceSecurityGroupId: !Ref rHAProxyBackendSG
+      Tags:
+        - Key: Name
+          Value: DST-mgmt-jmx-exporter
+        - Key: Owner
+          Value: !Ref pOwner
+
+  rPublicSSHSG:
+    Type: AWS::EC2::SecurityGroup
+    DependsOn:
+    - rVPC
+    Properties:
+      GroupName: DST-mgmt-ssh-bastion
+      GroupDescription: SSH access
+      VpcId: !Ref rVPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: DST-mgmt-ssh-bastion
+        - Key: Owner
+          Value: !Ref pOwner
+
+  # This SG is used by VPC Endpoints to permit Nodes/Etcd to use AWS services w/o NAT
+  rAWSInterfaceSG:
+    Type: AWS::EC2::SecurityGroup
+    DependsOn:
+    - rVPC
+    Properties:
+      GroupName: DST-mgmt-aws
+      GroupDescription: Access to AWS services
+      VpcId: !Ref rVPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: !Ref pVPCCIDR
+      Tags:
+        - Key: Name
+          Value: DST-mgmt-aws
+        - Key: Owner
+          Value: !Ref pOwner
+
+Outputs:
+    rVPC:
+        Value: !Ref rVPC
+        Export:
+          Name: DST-mgmt-vpcid
+    rPublicRouteTable:
+        Value: !Ref rRouteTableMain
+        Export:
+          Name: DST-mgmt--publicRT
+    rPrivateRouteTable:
+        Value: !Ref rRouteTablePrivate
+        Export:
+          Name: DST-mgmt--privateRT
+    rS3Endpoint:
+        Value: !Ref rVPCS3Endpoint
+        Export:
+          Name: DST-mgmt--s3Endpoint
+    rAZ:
+        Value: !Ref pAZ
+        Export:
+          Name: DST-mgmt--az
+    rPublicCIDR:
+        Value: !Ref pPublicCIDR
+        Export:
+          Name: DST-mgmt-public-cidr
