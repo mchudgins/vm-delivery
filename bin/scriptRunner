@@ -1,0 +1,170 @@
+#! /usr/bin/env bash
+#
+# This script launches an ec2 instance which itself runs a script.
+# Since this potentially allows a user with permission to assumeRole to run vetted scripts
+# with elevated permissions, caution/judgement should be used.
+#
+
+#
+# configuration
+#
+
+REGION=us-east-1
+INSTANCE_TYPE=t2.nano
+KEY_NAME="kp201707"
+SUBNET=""
+SUBNET_NAME="sandbox"
+IMAGE_ID="ami-97785bed"
+
+
+source $(dirname $(readlink -f $0))/../helpers/bash_functions
+
+#
+# flags from command line may supersede defaults
+#
+
+while test $# -gt 0; do
+    case "$1" in
+        -h|--help)
+            echo `basename $0` '--region (us-east-1|us-west-2)'
+            ;;
+
+        --instance-type)
+            shift
+            INSTANCE_TYPE=$1
+            ;;
+
+        --key-name)
+            shift
+            KEY_NAME=$1
+            ;;
+
+        --region)
+            shift
+            REGION=$1
+            ;;
+
+        --spot-price)
+            shift
+            SPOT_PRICE=$1
+            ;;
+
+        --subnet)
+            shift
+            SUBNET=$1
+            ;;
+
+        --subnet-name)
+            shift
+            SUBNET_NAME=$1
+            ;;
+
+         *)
+            break
+            ;;
+
+    esac
+    shift
+done
+
+# check if a spot price was provided
+if [[ -z "${SPOT_PRICE}" ]]; then
+    BID_PRICE=0.0275
+else
+    BID_PRICE=${SPOT_PRICE}
+fi
+
+# find the subnet to run this image in, if SUBNET not provided
+if [[ -z "${SUBNET}" ]]; then
+    subnets=`aws --region ${REGION} ec2 describe-subnets --filters Name=tag:Name,Values=${SUBNET_NAME}`
+    subnet=`echo ${subnets} | jq .Subnets[0].SubnetId | sed -e 's/"//g'`
+    if [[ -z "${subnet}" || "${subnet}" == "null" ]]; then
+        echo "Unable to find subnet named ${SUBNET_NAME}"
+        exit 1
+    fi
+    vpcid=`echo ${subnets} | jq .Subnets[0].VpcId | sed -e 's/"//g'`
+    SUBNET=${subnet}
+fi
+
+# find the security group(s)
+securityGroupName="default"
+
+    # then we can find the security group as <vpc-name>-prometheus-server
+
+SECURITY_GROUP=`aws --region ${REGION} ec2 describe-security-groups \
+    --filters Name=group-name,Values=${securityGroupName} Name=vpc-id,Values=${vpcid} | jq .SecurityGroups[0].GroupId | sed -e 's/"//g'`
+
+# create the cloud-init user data
+USERDATA=$(cat <<-"_EOF_" | sed -e "s/REGION=xxx/REGION=${REGION}/" | base64 -w 0
+#! /usr/bin/env bash
+echo "CLUSTER_NAME=mch" >/etc/default/prom-cfg-monitor
+iptables-restore < /etc/iptables.conf
+systemctl start prometheus
+systemctl start promproxy
+_EOF_
+)
+
+USERDATA=$(cat $1 | base64 -w 0)
+echo ${USERDATA} | base64 -d
+
+# create the updated json launch config in a temp file
+FILE=`mktemp`
+EBS_OPTIMIZED=`isEBSOptimizable ${INSTANCE_TYPE}`
+cat <<EOF >${FILE}
+{
+    "ImageId": "${IMAGE_ID}",
+    "KeyName": "${KEY_NAME}",
+    "UserData": "${USERDATA}",
+    "InstanceType": "${INSTANCE_TYPE}",
+    "IamInstanceProfile": {
+        "Name": "ec2CloudFormerRole"
+    },
+    "EbsOptimized": ${EBS_OPTIMIZED},
+    "Monitoring": {
+        "Enabled": false
+    },
+    "NetworkInterfaces": [
+      {
+        "AssociatePublicIpAddress": true,
+        "DeviceIndex": 0,
+        "SubnetId": "${SUBNET}",
+        "Groups": [
+            "${SECURITY_GROUP}"
+            ]
+      }
+    ]
+}
+EOF
+
+        cat ${FILE}
+
+# launch the instance. if a t2.* type use an on-demand instance, otherwise make a spot request
+IFS="." read -r -a el <<< "${INSTANCE_TYPE}"
+case "${el[0]}" in
+    t2)
+        USERDATAFILE=`mktemp`
+        echo ${USERDATA} | base64 -d >${USERDATAFILE}
+        instanceID=$(launchInstance ${REGION} ${FILE} ${USERDATAFILE})
+        rm ${USERDATAFILE}
+        ;;
+
+    *)
+        instanceID=$(launchSpotInstance ${REGION} ${BID_PRICE} ${FILE})
+        if [[ $? != 0 ]]; then
+            exit 1
+        fi
+        ;;
+esac
+
+if [[ -z "${instanceID}" ]]; then
+    echo "Unable to launch an instance"
+    exit 1
+fi
+
+echo instanceID ${instanceID}
+
+rm ${FILE}
+
+#tag the instance
+aws --region ${REGION} ec2 create-tags --resources ${instanceID} --tags Key=Name,Value="scriptRunner" Key=script,Value="$1" Key=Owner,Value="${USER}@dstsystems.com"
+

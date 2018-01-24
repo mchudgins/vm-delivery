@@ -651,22 +651,26 @@ Outputs:
         Value: !Ref rVPC
         Export:
           Name: DST-mgmt-vpcid
+    rPublicSubnet:
+        Value: !Ref rPublicSubnet
+        Export:
+          Name: DST-mgmt-public-subnet-id
     rPublicRouteTable:
         Value: !Ref rRouteTableMain
         Export:
-          Name: DST-mgmt--publicRT
+          Name: DST-mgmt-public-RT
     rPrivateRouteTable:
         Value: !Ref rRouteTablePrivate
         Export:
-          Name: DST-mgmt--privateRT
+          Name: DST-mgmt-private-RT
     rS3Endpoint:
         Value: !Ref rVPCS3Endpoint
         Export:
-          Name: DST-mgmt--s3Endpoint
+          Name: DST-mgmt-s3Endpoint
     rAZ:
         Value: !Ref pAZ
         Export:
-          Name: DST-mgmt--az
+          Name: DST-mgmt-az
     rPublicCIDR:
         Value: !Ref pPublicCIDR
         Export:
