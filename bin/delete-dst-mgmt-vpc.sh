@@ -3,6 +3,9 @@
 # this script deletes the DST management VPC in the current account
 #
 
+HZ=Z2YR9UHTJ6SHRF
+
+
 # exit immediately on an error
 set -e
 
@@ -13,12 +16,15 @@ REGION=`curl -s http://169.254.169.254/latest/meta-data/placement/availability-z
 
 vpcid=`aws --region ${REGION} cloudformation describe-stacks --stack-name dst-mgmt-vpc | jq -r '.Stacks[0].Outputs[] | select(.ExportName=="DST-mgmt-vpcid").OutputValue'`
 
-# delete the endpoint before the stack
+# delete the hosted zone association
+aws --region ${REGION} route53 disassociate-vpc-from-hosted-zone --hosted-zone-id ${HZ} -- vpc VPCRegion=${REGION},VPCId=${vpcid}
 
+# delete the endpoint before the stack
 endpoint=`aws --region ${REGION} ec2 describe-vpc-endpoints --filters Name=vpc-id,Values=${vpcid} Name=service-name,Values=com.amazonaws.${REGION}.ec2 | jq -r '.VpcEndpoints[0].VpcEndpointId'`
 echo aws --region ${REGION} ec2 delete-vpc-endpoints --vpc-endpoint-ids ${endpoint}
 aws --region ${REGION} ec2 delete-vpc-endpoints --vpc-endpoint-ids ${endpoint}
 
+# delete the stack
 echo aws --region ${REGION} cloudformation delete-stack --stack-name dst-mgmt-vpc
 aws --region ${REGION} cloudformation delete-stack --stack-name dst-mgmt-vpc
 

@@ -3,6 +3,8 @@
 # this script creates the DST management VPC in the current account
 #
 
+HZ=Z2YR9UHTJ6SHRF
+
 # assume we're running in an aws linux instance and need to install 'jq'
 sudo yum install -y jq
 
@@ -47,6 +49,9 @@ vpcid=`echo ${subnets} | jq .Subnets[0].VpcId | sed -e 's/"//g'`
 SUBNET=${subnet}
 
 aws --region ${REGION} ec2 create-vpc-endpoint --vpc-id ${vpcid} --service-name com.amazonaws.${REGION}.ec2 --private-dns-enabled --subnet-ids ${SUBNET} --vpc-endpoint-type Interface
+
+# associate the vpc with the route53 hosted zone
+aws --region ${REGION} route53 associate-vpc-with-hosted-zone --hosted-zone-id ${HZ} --vpc VPCRegion=${REGION},VPCId=${vpcid}
 
 sleep 120
 sudo shutdown -h now
