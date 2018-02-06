@@ -53,5 +53,7 @@ aws --region ${REGION} ec2 create-vpc-endpoint --vpc-id ${vpcid} --service-name 
 # associate the vpc with the route53 hosted zone
 aws --region ${REGION} route53 associate-vpc-with-hosted-zone --hosted-zone-id ${HZ} --vpc VPCRegion=${REGION},VPCId=${vpcid}
 
+
+
 sleep 120
 sudo shutdown -h now
