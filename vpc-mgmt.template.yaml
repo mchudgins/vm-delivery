@@ -20,8 +20,6 @@ Metadata:
                 default: Managment Subnet Private CIDR
             pAZ:
                 default: Availability Zone
-            pEnvironment:
-                default: Environment
             pOwner:
                 default: Owner
 
@@ -44,14 +42,6 @@ Parameters:
         Default: default
         AllowedValues:
           - default
-    pEnvironment:
-        Description: Environment (alpha, CI/CD, or development)
-        Type: String
-        Default: prod
-        AllowedValues:
-          - alpha
-          - development
-          - prod
     pAZ:
         Description: Availability Zone
         Type: AWS::EC2::AvailabilityZone::Name
@@ -79,6 +69,9 @@ Resources:
       DomainName: dst.cloud
       DomainNameServers:
       - AmazonProvidedDNS
+      Tags:
+      - Key: Name
+        Value: DST-mgmt
 
   rVPC:
     Type: AWS::EC2::VPC
@@ -89,10 +82,8 @@ Resources:
       EnableDnsHostnames: true
       Tags:
       - Key: Name
-        Value: !Sub DST-Mgmt-${pEnvironment}
+        Value: !Sub DST-mgmt
       - Key: Environment
-        Value: !Ref pEnvironment
-      - Key: StackName
         Value: !Ref AWS::StackName
       - Key: Owner
         Value: !Ref pOwner
@@ -112,8 +103,6 @@ Resources:
           Tags:
             - Key: Name
               Value: DST-mgmt
-            - Key: Environment
-              Value: !Ref pEnvironment
             - Key: Owner
               Value: !Ref pOwner
 
@@ -643,6 +632,28 @@ Resources:
       Tags:
         - Key: Name
           Value: DST-mgmt-aws
+        - Key: Owner
+          Value: !Ref pOwner
+
+  rVaultSG:
+    Type: AWS::EC2::SecurityGroup
+    DependsOn:
+    - rVPC
+    Properties:
+      GroupName: DST-mgmt-vault
+      GroupDescription: Vault
+      VpcId: !Ref rVPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: !Ref pVPCCIDR
+        Description: permit all instances within the VPC
+      Tags:
+        - Key: Name
+          Value: DST-mgmt-vault
+        - Key: StackName
+          Value: !Ref AWS::StackName
         - Key: Owner
           Value: !Ref pOwner
 

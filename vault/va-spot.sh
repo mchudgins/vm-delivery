@@ -8,9 +8,9 @@ REGION=us-east-1
 INSTANCE_TYPE=t2.nano
 KEY_NAME="kp201707"
 SUBNET=""
-SUBNET_NAME="o7t-alpha-mgmt"
+SUBNET_NAME="DST-mgmt-private"
 IMAGE_STREAM="vault"
-PRIVATE_IP=10.250.254.5
+PRIVATE_IP=10.255.255.5
 
 source ../helpers/bash_functions
 
@@ -114,6 +114,7 @@ if [[ -z "${vpcName}" ]]; then
 fi
 
 securityGroupName="${vpcName}-vault"
+echo securityGroupName ${securityGroupName}
 
     # then we can find the security group as <vpc-name>-vault
 
@@ -194,7 +195,7 @@ echo instanceID ${instanceID}
 rm ${FILE}
 
 #tag the instance
-aws --region ${REGION} ec2 create-tags --resources ${instanceID} --tags Key=Name,Value=${IMAGE_STREAM}
+aws --region ${REGION} ec2 create-tags --resources ${instanceID} --tags Key=Name,Value=${IMAGE_STREAM} Key=Owner,Value='mchudgins@dstsystems.com'
 
 #display the instance's IP ADDR
 #ipaddr=`aws --region ${REGION} ec2 describe-instances --instance-ids ${instanceID} | jq .Reservations[0].Instances[0].PublicIpAddress`
