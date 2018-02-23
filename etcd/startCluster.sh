@@ -5,9 +5,8 @@
 #
 
 REGION=us-east-1
-INSTANCE_TYPE=m4.large
+INSTANCE_TYPE=t2.nano
 KEY_NAME="kp201707"
-SUBNET="subnet-08849b7f"
 IMAGE_STREAM=etcd
 CLUSTER_NAME=vpc0
 NODE_IP="10.10.128.10"
@@ -47,11 +46,6 @@ while test $# -gt 0; do
             SPOT_PRICE=$1
             ;;
 
-        --subnet)
-            shift
-            SUBNET=$1
-            ;;
-
          *)
             break
             ;;
@@ -73,12 +67,45 @@ source ../helpers/bash_functions
 IMAGE_ID=$(mostRecentAMI ${IMAGE_STREAM})
 echo "Launching ${IMAGE_ID}"
 
+# compute the subnet id from the subnet name
+AWSDATA=`aws ec2 describe-subnets --filters Name=tag:Name,Values=${CLUSTER_NAME}-private`
+SUBNET=`echo ${AWSDATA} | jq .Subnets[0].SubnetId | sed -s 's/"//g'`
+VPC=`echo ${AWSDATA} | jq .Subnets[0].VpcId | sed -s 's/"//g'`
+CIDR=`echo ${AWSDATA} | jq .Subnets[0].CidrBlock | sed -e 's^.0/24^^' -e 's/"//g'`
+echo SUBNET=${SUBNET} VPC=${VPC}
+if [[ -z "${SUBNET}" || "${SUBNET}" == "null" ]]; then
+    echo "Unable to find the private subnet (${CLUSTER_NAME}-private) within the ${CLUSTER_NAME} cluster"
+    exit 1
+fi
+
+# find the security groups: <vpc-name>-etcd and <vpc-name>-prometheus-monitored-instance
+    # first we need to find the name of the vpc
+vpcinfo=$(aws --region ${REGION} ec2 describe-vpcs --filters Name=vpc-id,Values=${VPC})
+    # iterate over the tags for the "Name" tag
+tagCount=$(echo ${vpcinfo} | jq '.Vpcs[] | length')
+for j in `seq 1 ${tagCount}`; do
+    iter=`expr $j - 1`
+    tagName=`echo ${vpcinfo} | jq .Vpcs[0].Tags[$iter].Key | sed -e 's/"//g'`
+    if [[ ${tagName} == "Name" ]]; then
+        vpcName=`echo ${vpcinfo} | jq .Vpcs[0].Tags[$iter].Value | sed -e 's/"//g'`
+    fi
+done
+
+if [[ -z "${vpcName}" ]]; then
+    echo "Unable to find the vpc Name tag within vpc ${VPC}"
+    exit 2
+fi
+
+etcdSG=`aws ec2 describe-security-groups --filters Name=group-name,Values=${vpcName}-etcd | jq .SecurityGroups[0].GroupId | sed -e 's/"//g'`
+promSG=`aws ec2 describe-security-groups --filters Name=group-name,Values=o7t-alpha-prometheus-monitored-instance | jq .SecurityGroups[0].GroupId | sed -e 's/"//g'`
+
+
 #
 # define 'launchInstance' to spin up a VM on AWS
 # with the appropriate parameters
 #
 
-function launchInstance {
+function launchEtcdInstance {
 
 INSTANCE_ID=$1
 NODE_NAME=$2$1
@@ -92,10 +119,9 @@ ENV_FILE=/etc/default/etcd
 #USERDATA=$(cat <<-"_EOF_" | sed -e "s/REGION=xxx/REGION=${REGION}/" | base64 -w 0
 USERDATA=$(cat <<-_EOF_ | base64 -w 0
 #! /bin/bash
-hostname ip-`echo ${NODE_IP} | sed -e 's/\./-/g'`.ec2.internal
+#hostname ip-`echo ${NODE_NAME}-${CLUSTER_NAME} | sed -e 's/\./-/g'`.dst.cloud
+hostname ${NODE_NAME}-${CLUSTER_NAME}.dst.cloud
 
-id >/tmp/id.uid
-date > /tmp/cloud-final
 echo REGION=${REGION}              > ${ENV_FILE}
 echo INSTANCE_ID=${INSTANCE_ID}   >> ${ENV_FILE}
 echo NODE_NAME=${NODE_NAME}       >> ${ENV_FILE}
@@ -132,7 +158,7 @@ cat <<EOF >${FILE}
         "SubnetId": "${SUBNET}",
         "PrivateIpAddress": "${NODE_IP}",
         "Groups": [
-            "sg-5ef8153a"
+            "${etcdSG}", "${promSG}"
             ]
       }
     ]
@@ -141,10 +167,29 @@ EOF
 
 cat ${FILE}
 
-instanceID=$(launchSpotInstance ${REGION} ${BID_PRICE} ${FILE})
-if [[ $? != 0 ]]; then
-    exit 1
-fi
+# launch the instance. if a t2.* type use an on-demand instance, otherwise make a spot request
+IFS="." read -r -a el <<< "${INSTANCE_TYPE}"
+case "${el[0]}" in
+    t2)
+        echo "Launching an on-demand instance"
+        USERDATAFILE=`mktemp`
+        echo ${USERDATA} | base64 -d >${USERDATAFILE}
+        instanceID=$(launchInstance ${REGION} ${FILE} ${USERDATAFILE})
+        if [[ $? -ne 0 ]]; then
+            echo "Error occurred; exiting."
+            exit 1
+        fi
+        rm ${USERDATAFILE}
+        ;;
+
+    *)
+        echo "Launching a spot instance"
+        instanceID=$(launchSpotInstance ${REGION} ${BID_PRICE} ${FILE})
+        if [[ $? != 0 ]]; then
+            exit 1
+        fi
+        ;;
+esac
 
 rm ${FILE}
 
@@ -153,11 +198,11 @@ aws --region ${REGION} ec2 create-tags --resources ${instanceID} \
     --tags Key=Name,Value=${NODE_NAME} Key=Cluster,Value=${CLUSTER_NAME}
 
 #display the instance's IP ADDR
-ipaddr=`aws --region ${REGION} ec2 describe-instances --instance-ids ${instanceID} | jq .Reservations[0].Instances[0].PublicIpAddress`
-echo Instance ${instanceID} available at ${ipaddr}
+#ipaddr=`aws --region ${REGION} ec2 describe-instances --instance-ids ${instanceID} | jq .Reservations[0].Instances[0].PublicIpAddress`
+echo Instance ${instanceID}
 }
 
-CLUSTER_INIT="etcd0=https://10.10.128.10:2380,etcd1=https://10.10.128.11:2380,etcd2=https://10.10.128.12:2380"
-launchInstance 0 etcd "10.10.128.10" ${CLUSTER_NAME} ${CLUSTER_INIT}
-launchInstance 1 etcd "10.10.128.11" ${CLUSTER_NAME} ${CLUSTER_INIT}
-launchInstance 2 etcd "10.10.128.12" ${CLUSTER_NAME} ${CLUSTER_INIT}
+CLUSTER_INIT="etcd0=https://${CIDR}.10:2380,etcd1=https://${CIDR}.11:2380,etcd2=https://${CIDR}.12:2380"
+launchEtcdInstance 0 etcd "${CIDR}.10" ${CLUSTER_NAME} ${CLUSTER_INIT}
+launchEtcdInstance 1 etcd "${CIDR}.11" ${CLUSTER_NAME} ${CLUSTER_INIT}
+launchEtcdInstance 2 etcd "${CIDR}.12" ${CLUSTER_NAME} ${CLUSTER_INIT}

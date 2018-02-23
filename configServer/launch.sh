@@ -113,8 +113,11 @@ USERDATA=$(cat <<-"_EOF_" | sed -e "s/REGION=xxx/REGION=${REGION}/" | base64 -w 
 runcmd:
     - iptables-restore < /etc/iptables.conf
 #    - echo "GIT_REPO_URL=something" >/tmp/config-server
-    - echo "HELLO=WORLD" >/tmp/config-server
+    - echo 'GIT_REPO_URL="https://git-codecommit.us-east-1.amazonaws.com/v1/repos/testRepo"' >>/etc/default/config-server
+    - echo 'GIT_REPO_UID="mch-test-at-362788145219"' >>/etc/default/config-server
+    - echo 'GIT_REPO_PWORD="f9Cdlg4dFle5iwmgkjhyyjyeL6+o0dXM92ihsJhf8cI="' >>/etc/default/config-server
     - cat /tmp/config-server >>/etc/default/config-server
+    - systemctl restart config-server
 _EOF_
 )
 

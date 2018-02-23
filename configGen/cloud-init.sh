@@ -32,7 +32,7 @@ aws --region ${REGION} s3 cp ${ORIGIN_ARTIFACT} /tmp/origin.tar.gz \
 
 # create the config generator script
 cat <<"EOF" >/tmp/configGen
-#! /bin/bash
+#! /usr/bin/env bash
 HOME=/var/lib/configGen
 VAULT_ADDR=https://vault.dst.cloud
 S3KEYS=s3://io.dstcorp.vault.o7t-alpha/vault.keys
@@ -89,12 +89,19 @@ cd ${CLUSTER}
 
 etcd=`vault write -format=json ucap/issue/dst-cloud common_name=etcd-${CLUSTER}.dst.cloud \
     alt_names="etcd0-${CLUSTER}.dst.cloud,etcd1-${CLUSTER}.dst.cloud,etcd2-${CLUSTER}.dst.cloud,etcd3-${CLUSTER}.dst.cloud,etcd4-${CLUSTER}.dst.cloud"`
+if [[ $? -ne 0 ]]; then
+    echo "Unable to create certificate for etcd-${CLUSTER}.dst.cloud"
+    exit 1
+fi
 
 vault write secret/certificates/etcd-${CLUSTER}.dst.cloud key="`echo ${etcd} | jq -r .data.private_key`"
 if [[ $? -eq 0 ]]; then
     echo ${etcd} | jq -r .data.certificate >etcd-${CLUSTER}.dst.cloud.pem
     cat ~/ca-bundle.pem >>etcd-${CLUSTER}.dst.cloud.pem
     git add etcd-${CLUSTER}.dst.cloud.pem
+else
+    echo "Unable to persist key for etcd-${CLUSTER}.dst.cloud"
+    exit 1
 fi
 
 # all done, commit the repo's changes
