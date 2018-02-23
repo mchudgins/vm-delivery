@@ -19,6 +19,7 @@ function findSubnetFromVolumeID {
 
 REGION=us-east-1
 INSTANCE_TYPE=r4.xlarge
+VOLUME_NAME="mch-home"
 
 #
 # flags from command line may supersede defaults
@@ -60,6 +61,11 @@ while test $# -gt 0; do
             SUBNET=$1
             ;;
 
+         --volume-name)
+            shift
+            VOLUME_NAME=$1
+            ;;
+
          *)
             break
             ;;
@@ -68,15 +74,15 @@ while test $# -gt 0; do
     shift
 done
 
-if [[ "${REGION}" == "us-east-1" && -z "${VOLUME}" && -z "${KEY_NAME}" ]]; then
-    VOLUME=vol-01b94820c77f80c3e
+VOLUME=`aws --region ${REGION} ec2 describe-volumes --filters Name=tag:Name,Values=${VOLUME_NAME} | jq -r .Volumes[0].VolumeId`
+
+if [[ "${REGION}" == "us-east-1" && -z "${KEY_NAME}" ]]; then
     KEY_NAME="kp201707"
     VPCID="vpc-94f4ffff"
     SecurityGroups='"sg-5ef8153a"'
 fi
 
 if [[ "${REGION}" == "us-east-2" && -z "${VOLUME}" && -z "${KEY_NAME}" ]]; then
-    VOLUME=vol-0adf4fd9ab9eb296d
     KEY_NAME="us-east-2a"
     VPCID="vpc-b305eeda"
     SecurityGroups='"sg-0a7b8863","sg-1e857176","sg-51867239"'
@@ -212,7 +218,8 @@ while [[ "${instanceID}" == "null" ]]
   instanceID=`aws --region ${REGION} ec2 describe-spot-instance-requests --spot-instance-request ${requestID} \
     | jq .SpotInstanceRequests[0].InstanceId | sed -e 's/"//g'`
   done
-aws --region ${REGION} ec2 create-tags --resources ${instanceID} --tags Key=Name,Value=mch-dev
+aws --region ${REGION} ec2 create-tags --resources ${instanceID} --tags Key=Name,Value=mch-dev \
+    Key=Owner,Value='mchudgins@dstsystems.com'
 
 #display the instance's IP ADDR
 ipaddr=`aws --region ${REGION} ec2 describe-instances --instance-ids ${instanceID} | jq .Reservations[0].Instances[0].PublicIpAddress`
@@ -227,7 +234,7 @@ cat <<EOF >${FILE}
         {
             "Action": "UPSERT",
             "ResourceRecordSet": {
-                "Name": "mch-dev.dstcorp.io.",
+                "Name": "dev.dstcorp.io.",
                 "Type": "A",
                 "TTL": 300,
                 "ResourceRecords": [
