@@ -17,7 +17,7 @@ REGION=`curl -s http://169.254.169.254/latest/meta-data/placement/availability-z
 vpcid=`aws --region ${REGION} cloudformation describe-stacks --stack-name dst-mgmt-vpc | jq -r '.Stacks[0].Outputs[] | select(.ExportName=="DST-mgmt-vpcid").OutputValue'`
 
 # delete the hosted zone association
-aws --region ${REGION} route53 disassociate-vpc-from-hosted-zone --hosted-zone-id ${HZ} -- vpc VPCRegion=${REGION},VPCId=${vpcid}
+aws --region ${REGION} route53 disassociate-vpc-from-hosted-zone --hosted-zone-id ${HZ} --vpc VPCRegion=${REGION},VPCId=${vpcid}
 
 # delete the endpoint before the stack
 endpoint=`aws --region ${REGION} ec2 describe-vpc-endpoints --filters Name=vpc-id,Values=${vpcid} Name=service-name,Values=com.amazonaws.${REGION}.ec2 | jq -r '.VpcEndpoints[0].VpcEndpointId'`
