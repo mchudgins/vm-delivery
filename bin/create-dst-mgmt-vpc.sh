@@ -16,7 +16,6 @@ aws --region ${REGION} cloudformation create-stack --stack-name dst-mgmt-vpc --t
        ParameterKey=pPublicCIDR,ParameterValue=10.255.0.0/24 \
        ParameterKey=pPrivateCIDR,ParameterValue=10.255.255.0/24 \
        ParameterKey=pVPCTenancy,ParameterValue=default \
-       ParameterKey=pEnvironment,ParameterValue=alpha \
        ParameterKey=pAZ,ParameterValue=us-east-1e \
        ParameterKey=pOwner,ParameterValue='mchudgins@dstsystems.com' \
    --tags Key=Owner,Value='mchudgins@dstsystems.com'

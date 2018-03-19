@@ -47,5 +47,12 @@ vault.ami: ubuntu.ami aws-bake.json vault/cloud-init.sh
 	bin/bake --parent $(shell cat ubuntu.ami) --image-stream vault --artifact-version 0.9.1 \
    		--description 'Hashicorp Vault based on Ubuntu 17.10' vault/cloud-init.sh
 
+vpc-up:
+	aws s3 cp vpc-mgmt.template.yaml s3://dstcorp/cf-templates/vpc-mgmt.template.yaml
+	bin/scriptRunner bin/create-dst-mgmt-vpc.sh
+
+vpc-down:
+	bin/scriptRunner bin/delete-dst-mgmt-vpc.sh
+
 clean:
 	rm *.ami
