@@ -20,6 +20,8 @@ function findSubnetFromVolumeID {
 REGION=us-east-1
 INSTANCE_TYPE=r4.xlarge
 VOLUME_NAME="mch-home"
+HOST_NAME="dev.dstcorp.io"
+SUBNET="DST-mgmt-public"
 
 #
 # flags from command line may supersede defaults
@@ -34,6 +36,11 @@ while test $# -gt 0; do
 
         -h|--help)
             echo `basename $0` '--region (us-east-1|us-west-2)'
+            ;;
+
+        --hostname)
+            shift
+            HOST_NAME=$1
             ;;
 
         --instance-type)
@@ -66,6 +73,11 @@ while test $# -gt 0; do
             VOLUME_NAME=$1
             ;;
 
+        --vpc)
+            shift
+            VPC_NAME=$1
+            ;;
+
          *)
             break
             ;;
@@ -75,17 +87,13 @@ while test $# -gt 0; do
 done
 
 VOLUME=`aws --region ${REGION} ec2 describe-volumes --filters Name=tag:Name,Values=${VOLUME_NAME} | jq -r .Volumes[0].VolumeId`
+DATA=`aws --region ${REGION} ec2 describe-subnets --filters Name=tag:Name,Values=${SUBNET}`
+SUBNETID=`echo ${DATA} | jq -r .Subnets[0].SubnetId`
+VPCID=`echo ${DATA} | jq -r .Subnets[0].VpcId`
+SecurityGroups=`aws --region ${REGION} ec2 describe-security-groups --filters Name=tag:Name,Values=DST-mgmt-hack | jq .SecurityGroups[0].GroupId`
 
 if [[ "${REGION}" == "us-east-1" && -z "${KEY_NAME}" ]]; then
     KEY_NAME="kp201707"
-    VPCID="vpc-94f4ffff"
-    SecurityGroups='"sg-5ef8153a"'
-fi
-
-if [[ "${REGION}" == "us-east-2" && -z "${VOLUME}" && -z "${KEY_NAME}" ]]; then
-    KEY_NAME="us-east-2a"
-    VPCID="vpc-b305eeda"
-    SecurityGroups='"sg-0a7b8863","sg-1e857176","sg-51867239"'
 fi
 
 # check if a spot price was provided
@@ -95,10 +103,15 @@ else
     BID_PRICE=${SPOT_PRICE}
 fi
 
+if [[ "${REGION}" == "us-east-2" && -z "${VOLUME}" && -z "${KEY_NAME}" ]]; then
+    KEY_NAME="us-east-2a"
+fi
 
 AZ=`aws --region ${REGION} ec2 describe-volumes --volume-ids ${VOLUME} | jq .Volumes[0].AvailabilityZone`
-SUBNETS=`aws --region ${REGION} ec2 describe-subnets --filters Name=vpc-id,Values=${VPCID}`
-SUBNET=`findSubnetFromVolumeID "${SUBNETS}" ${AZ}`
+#SUBNETS=`aws --region ${REGION} ec2 describe-subnets --filters Name=vpc-id,Values=${VPCID}`
+#if [[ -z "${SUBNET}" ]]; then
+#    SUBNET_CANDIDATES=`findSubnetFromVolumeID "${SUBNETS}" ${AZ}`
+#fi
 
 if [[ ! /bin/true ]]; then
     echo SUBNET=${SUBNET}
@@ -134,12 +147,15 @@ IMAGE_ID=`echo ${IMAGES} | jq .Images[${MAX_IMAGE_INDEX}].ImageId`
 echo "Launching ${IMAGE_NAME} (${IMAGE_ID})"
 
 # create the cloud-init user data
-USERDATA=$(cat <<-"_EOF_" | sed -e "s/VOLUME=xxx/VOLUME=${VOLUME}/" -e "s/REGION=xxx/REGION=${REGION}/" | base64 -w 0
+USERDATA=$(cat <<-"_EOF_" | sed -e "s/VOLUME=xxx/VOLUME=${VOLUME}/" \
+    -e "s/REGION=xxx/REGION=${REGION}/" \
+    -e "s/HOSTNAME=xxx/HOSTNAME=${HOST_NAME}/" | base64 -w 0
 #! /bin/bash
 TARGET_USER=mchudgins
 REGION=xxx
 VOLUME=xxx
-hostname mch-dev.dstcorp.io
+HOSTNAME=xxx
+hostname ${HOSTNAME}
 adduser --gecos 'Mike Hudgins,,,' --disabled-password ${TARGET_USER}
 aws --region ${REGION} ec2 attach-volume --volume-id ${VOLUME} \
   --instance-id `curl -s http://169.254.169.254/latest/meta-data/instance-id` \
@@ -173,7 +189,7 @@ cat <<EOF >${FILE}
     ],
     "UserData": "${USERDATA}",
     "InstanceType": "${INSTANCE_TYPE}",
-    "SubnetId": ${SUBNET},
+    "SubnetId": "${SUBNETID}",
     "IamInstanceProfile": {
         "Name": "ec2PackerInstanceRole"
     },
@@ -218,14 +234,14 @@ while [[ "${instanceID}" == "null" ]]
   instanceID=`aws --region ${REGION} ec2 describe-spot-instance-requests --spot-instance-request ${requestID} \
     | jq .SpotInstanceRequests[0].InstanceId | sed -e 's/"//g'`
   done
-aws --region ${REGION} ec2 create-tags --resources ${instanceID} --tags Key=Name,Value=mch-dev \
+aws --region ${REGION} ec2 create-tags --resources ${instanceID} --tags Key=Name,Value=${HOST_NAME} \
     Key=Owner,Value='mchudgins@dstsystems.com'
 
 #display the instance's IP ADDR
 ipaddr=`aws --region ${REGION} ec2 describe-instances --instance-ids ${instanceID} | jq .Reservations[0].Instances[0].PublicIpAddress`
 echo Instance available at ${ipaddr}
 
-# update the DNS entry for this new instance of mch-dev.dstcorp.io
+# update the DNS entry for this new instance
 FILE=`mktemp`
 cat <<EOF >${FILE}
 {
@@ -234,7 +250,7 @@ cat <<EOF >${FILE}
         {
             "Action": "UPSERT",
             "ResourceRecordSet": {
-                "Name": "dev.dstcorp.io.",
+                "Name": "${HOST_NAME}.",
                 "Type": "A",
                 "TTL": 300,
                 "ResourceRecords": [
