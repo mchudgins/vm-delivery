@@ -62,17 +62,20 @@ sudo sed -i /etc/systemd/system/multi-user.target.wants/docker.service \
   -e 's|^ExecStart=/usr/bin/dockerd|ExecStart=/usr/bin/dockerd --insecure-registry 172.30.0.0/16|g'
 sudo systemctl enable docker
 
-# go 1.8.3
-curl -sL https://storage.googleapis.com/golang/go1.8.3.linux-amd64.tar.gz -o /tmp/go.tar.gz
-cd /usr/local
-sudo tar xvfz /tmp/go.tar.gz
-sudo mv go go1.8.3
 # go 1.9.2
 curl -sL https://redirector.gvt1.com/edgedl/go/go1.9.2.linux-amd64.tar.gz -o /tmp/go.tar.gz
 cd /usr/local
 sudo tar xvfz /tmp/go.tar.gz
 sudo mv go go1.9.2
-sudo ln -s go1.9.2 go
+
+# go 1.10
+curl -sL https://dl.google.com/go/go1.10.linux-amd64.tar.gz -o /tmp/go.tar.gz
+cd /usr/local
+sudo tar xvfz /tmp/go.tar.gz
+sudo mv go go1.10
+
+sudo ln -s go1.10 go
+
 
 # sudo access for dev's
 sudo bash -c 'echo "# all members of the dev group can sudo anything" >/etc/sudoers.d/dev'
