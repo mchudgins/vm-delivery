@@ -10,7 +10,7 @@ all: $(TARGETS)
 	@echo $(TARGETS)
 
 ubuntu.ami: aws-bake.json ubuntu/cloud-init.sh
-	bin/bake --parent ami-534bc129 --image-stream ubuntu --artifact-version 17.10 \
+	bin/bake --parent ami-ba48aac7 --image-stream ubuntu --artifact-version 17.10 \
 		--description 'base image from Ubuntu 17.10' ubuntu/cloud-init.sh
 
 configGen.ami: ubuntu.ami aws-bake.json configGen/cloud-init.sh
