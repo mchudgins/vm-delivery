@@ -330,6 +330,20 @@ Resources:
       RuleAction: allow
       RuleNumber: 300
 
+  rACLPublicRule301:
+    Type: "AWS::EC2::NetworkAclEntry"
+    DependsOn: rACLPublic
+    Properties:
+      CidrBlock: 0.0.0.0/0
+      Egress: false
+      NetworkAclId: !Ref rACLPublic
+      PortRange:
+        From: 8443
+        To: 8443
+      Protocol: 6
+      RuleAction: allow
+      RuleNumber: 301
+
   # Prometheus node monitoring in, from the private subnet
   rACLPublicRule400:
     Type: "AWS::EC2::NetworkAclEntry"
@@ -359,6 +373,21 @@ Resources:
       Protocol: 6
       RuleAction: allow
       RuleNumber: 500
+
+  # Permit reply traffic from the outside world
+  rACLPublicRule850:
+    Type: "AWS::EC2::NetworkAclEntry"
+    DependsOn: rACLPublic
+    Properties:
+      CidrBlock: 0.0.0.0/0
+      Egress: false
+      NetworkAclId: !Ref rACLPublic
+      PortRange:
+        From: 32768
+        To: 60999
+      Protocol: 6
+      RuleAction: allow
+      RuleNumber: 850
 
   rPublicSubnetACLAssociation:
     Type: "AWS::EC2::SubnetNetworkAclAssociation"
