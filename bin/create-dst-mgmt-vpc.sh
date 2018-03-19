@@ -48,12 +48,26 @@ fi
 vpcid=`echo ${subnets} | jq .Subnets[0].VpcId | sed -e 's/"//g'`
 SUBNET=${subnet}
 
+# create the ec2 endpoint
 aws --region ${REGION} ec2 create-vpc-endpoint --vpc-id ${vpcid} --service-name com.amazonaws.${REGION}.ec2 --private-dns-enabled --subnet-ids ${SUBNET} --vpc-endpoint-type Interface
+
+# attach a 443-only security group to the endpoint; have to wait for the endpoint to be "available" before the api call works
+awssg=`aws --region ${REGION} ec2 describe-security-groups --filters Name=tag:Name,Values=DST-mgmt-aws | jq -r .SecurityGroups[0].GroupId`
+vpceid=`aws --region ${REGION} ec2 describe-vpc-endpoints --filters Name=vpc-id,Values=${vpcid} Name=service-name,Values=com.amazonaws.us-east-1.ec2 | jq -r .VpcEndpoints[0].VpcEndpointId`
+vpcestate=`aws --region ${REGION} ec2 describe-vpc-endpoints --filters Name=vpc-id,Values=${vpcid} Name=service-name,Values=com.amazonaws.us-east-1.ec2 | jq -r .VpcEndpoints[0].State`
+while [[ ( -z "${vpceid}" || "${vpceid}" == "null" ) && ${vpcestate} != "available" ]]; do
+    sleep 2
+    vpceid=`aws --region ${REGION} ec2 describe-vpc-endpoints --filters Name=vpc-id,Values=${vpcid} Name=service-name,Values=com.amazonaws.us-east-1.ec2 | jq -r .VpcEndpoints[0].VpcEndpointId`
+    vpcestate=`aws --region ${REGION} ec2 describe-vpc-endpoints --filters Name=vpc-id,Values=${vpcid} Name=service-name,Values=com.amazonaws.us-east-1.ec2 | jq -r .VpcEndpoints[0].State`
+done
+result=`aws --region ${REGION} ec2 modify-vpc-endpoint --vpc-endpoint-id ${vpceid} --add-security-group-ids ${awssg}`
+if [[ $? -ne 0 ]]; then
+    echo "unable to modify-vpc-endpoint" ${result}
+    exit 1
+fi
 
 # associate the vpc with the route53 hosted zone
 aws --region ${REGION} route53 associate-vpc-with-hosted-zone --hosted-zone-id ${HZ} --vpc VPCRegion=${REGION},VPCId=${vpcid}
-
-
 
 sleep 120
 sudo shutdown -h now

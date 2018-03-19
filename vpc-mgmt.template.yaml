@@ -189,12 +189,14 @@ Resources:
     Properties:
         AvailabilityZone: !Ref pAZ
         CidrBlock: !Ref pPublicCIDR
-        MapPublicIpOnLaunch: false
+        MapPublicIpOnLaunch: true
         Tags:
           - Key: Name
             Value: !Sub DST-mgmt-public
           - Key: Owner
             Value: !Ref pOwner
+          - Key: SingleNode
+            Value: true
         VpcId: !Ref rVPC
 
   rPublicRouteAssociation:
@@ -517,6 +519,48 @@ Resources:
 # Security Groups
 #
 
+  # for hacking
+  rHackSG:
+    Type: AWS::EC2::SecurityGroup
+    DependsOn:
+    - rVPC
+    Properties:
+      GroupName: DST-mgmt-hack
+      GroupDescription: used for hacking on instances
+      VpcId: !Ref rVPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp: 170.40.0.0/16
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 170.40.0.0/16
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: 170.40.0.0/16
+      - IpProtocol: tcp
+        FromPort: 8443
+        ToPort: 8443
+        CidrIp: 170.40.0.0/16
+      # kirchmeier's home
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 40000
+        CidrIp: 136.61.111.27/32
+      # hudgins' home
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 40000
+        CidrIp: 136.33.81.197/32
+      Tags:
+        - Key: Name
+          Value: DST-mgmt-hack
+        - Key: Owner
+          Value: !Ref pOwner
+
   # the HA proxy in the public subnet
   rHAProxySG:
     Type: AWS::EC2::SecurityGroup
@@ -530,7 +574,11 @@ Resources:
       - IpProtocol: tcp
         FromPort: 443
         ToPort: 443
-        CidrIp: 0.0.0.0/0
+        CidrIp: 170.40.0.0/16
+      - IpProtocol: tcp
+        FromPort: 8443
+        ToPort: 8443
+        CidrIp: 170.40.0.0/16
       Tags:
         - Key: Name
           Value: DST-mgmt-haproxy
@@ -608,7 +656,7 @@ Resources:
       - IpProtocol: tcp
         FromPort: 22
         ToPort: 22
-        CidrIp: 0.0.0.0/0
+        CidrIp: 170.40.0.0/16
       Tags:
         - Key: Name
           Value: DST-mgmt-ssh-bastion
