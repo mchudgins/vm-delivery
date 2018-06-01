@@ -8,7 +8,7 @@ REGION=us-east-1
 INSTANCE_TYPE=t2.nano
 KEY_NAME="kp201707"
 IMAGE_STREAM=squid
-SUBNET_NAME=mch-public
+SUBNET_NAME=DST-mgmt-public
 CLUSTER_NAME=dev
 
 #
@@ -95,24 +95,12 @@ fi
     # then we can find the security group as <vpc-name>-vault
 
 CONFIG_SECURITY_GROUP=`aws --region ${REGION} ec2 describe-security-groups \
-    --filters Name=group-name,Values=${vpcName}-configServer | jq .SecurityGroups[0].GroupId | sed -e 's/"//g'`
+    --filters Name=group-name,Values=default Name=vpc-id,Values=${VPC} | jq .SecurityGroups[0].GroupId | sed -e 's/"//g'`
 NODE_EXPORTER_SECURITY_GROUP=`aws --region ${REGION} ec2 describe-security-groups \
-    --filters Name=group-name,Values=${vpcName}-prometheus-monitored-instance | jq .SecurityGroups[0].GroupId | sed -e 's/"//g'`
+    --filters Name=group-name,Values=${vpcName}-node-exporter | jq .SecurityGroups[0].GroupId | sed -e 's/"//g'`
 
 
 # create the cloud-init user data
-#USERDATA=$(cat <<-_EOF_ | base64 -w 0
-##! /usr/bin/env bash
-#hostname ip-10-10-128-6.ec2.internal
-#
-#REGION=${REGION}
-#
-#echo "hello" >/tmp/cloud-init
-#
-#docker run -d -e GIT_REPO_URL=https://github.com/mchudgins/config-props.git -p 80:8888 \
-#    mchudgins/configserver:0.0.2-SNAPSHOT
-#_EOF_
-#)
 USERDATA=$(cat <<-"_EOF_" | sed -e "s/CLUSTER_NAME=xxx/CLUSTER_NAME=${CLUSTER_NAME}/" | base64 -w 0
 #cloud-config
 runcmd:
@@ -194,8 +182,15 @@ deviceId=`aws ec2 describe-instances --filter Name=instance-id,Values=${instance
 aws ec2 modify-network-interface-attribute --network-interface-id ${deviceId} --no-source-dest-check
 
 #add the device as a route in the private network
-rt=`aws ec2 describe-route-tables --filters Name="tag:Name",Values="o7t-alpha-private" | jq -r .RouteTables[0].RouteTableId`
+rt=`aws ec2 describe-route-tables --filters Name="tag:Name",Values="DST-mgmt-private" | jq -r .RouteTables[0].RouteTableId`
 aws ec2 replace-route \
     --route-table-id ${rt} \
     --instance-id ${instanceID} \
     --destination-cidr-block '0.0.0.0/0'
+# on failure, try a create-route instead
+if [[ $? != 0 ]]; then
+    aws ec2 create-route \
+        --route-table-id ${rt} \
+        --instance-id ${instanceID} \
+        --destination-cidr-block '0.0.0.0/0'
+fi

@@ -535,6 +535,21 @@ Resources:
       RuleAction: allow
       RuleNumber: 300
 
+  # Permit reply traffic from the public internet
+  rACLPrivateRule800:
+    Type: "AWS::EC2::NetworkAclEntry"
+    DependsOn: rACLPublic
+    Properties:
+      CidrBlock: 0.0.0.0/0
+      Egress: false
+      NetworkAclId: !Ref rACLPrivate
+      PortRange:
+        From: 32768
+        To: 60999
+      Protocol: 6
+      RuleAction: allow
+      RuleNumber: 800
+
   rPrivateSubnetACLAssociation:
     Type: "AWS::EC2::SubnetNetworkAclAssociation"
     DependsOn:
@@ -571,9 +586,17 @@ Resources:
         ToPort: 443
         CidrIp: 170.40.0.0/16
       - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: !Ref pVPCCIDR
+      - IpProtocol: tcp
         FromPort: 8443
         ToPort: 8443
         CidrIp: 170.40.0.0/16
+      - IpProtocol: tcp
+        FromPort: 8443
+        ToPort: 8443
+        CidrIp: !Ref pVPCCIDR
       # kirchmeier's home
       - IpProtocol: tcp
         FromPort: 22
