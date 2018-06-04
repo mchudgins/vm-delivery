@@ -4,13 +4,14 @@
 
 TARGETS := $(shell bin/generateTargets)
 
-ROOT_AMI := "ami-cd0f5cb6"
+#ROOT_AMI := "ami-cd0f5cb6"
+ROOT_AMI := "ami-7031aa0f"
 
 all: $(TARGETS)
 	@echo $(TARGETS)
 
 ubuntu.ami: aws-bake.json ubuntu/cloud-init.sh
-	bin/bake --parent ami-ba48aac7 --image-stream ubuntu --artifact-version 17.10 \
+	bin/bake --parent ami-7031aa0f --image-stream ubuntu --artifact-version 17.10 \
 		--description 'base image from Ubuntu 17.10' ubuntu/cloud-init.sh
 
 configGen.ami: ubuntu.ami aws-bake.json configGen/cloud-init.sh
@@ -34,6 +35,10 @@ master.ami: ubuntu.ami aws-bake.json master/cloud-init.sh
 node.ami: ubuntu.ami aws-bake.json node/cloud-init.sh
 	bin/bake --parent $(shell cat ubuntu.ami) --image-stream node --artifact-version 3.6.1 \
    		--description 'Origin Node based on Ubuntu 17.10' node/cloud-init.sh
+
+openVPN.ami: ubuntu.ami aws-bake.json openVPN/cloud-init.sh
+	bin/bake --parent $(shell cat ubuntu.ami) --image-stream openVPN --artifact-version 1.0.0 \
+   		--description 'OpenVPN based on Ubuntu 17.10' openVPN/cloud-init.sh
 
 prometheus.ami: ubuntu.ami aws-bake.json prometheus/cloud-init.sh
 	bin/bake --parent $(shell cat ubuntu.ami) --image-stream prometheus --artifact-version 2.1.0 \
