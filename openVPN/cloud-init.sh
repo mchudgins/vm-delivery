@@ -75,6 +75,9 @@ sudo systemctl enable openvpn.service
 openssl dhparam -out /tmp/dh2048.pem 2048
 sudo cp /tmp/dh2048.pem /etc/openvpn/server/dh2048.pem
 
+# enable ip forwarding on reboot
+echo net.ipv4.conf.ip_forward=1 | sudo tee -a /etc/sysctl.conf
+
 # clean up
 sudo apt-get autoremove
 #sudo apt-get clean
