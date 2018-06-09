@@ -44,6 +44,35 @@ path "secret/CA/*" {
 EOF
 vault policy-write ca /tmp/ca-policy.hcl
 
+cat <<EOF >/tmp/configserver-policy.hcl
+path "secret/projects/config/*" {
+  capabilities = [ "read", "list"]
+}
+EOF
+vault policy write configserver /tmp/configserver-policy.hcl
+
+cat <<EOF >/tmp/configMergeBot.hcl
+path "secret/aws-lambda/configMergeBot/*" {
+  capabilities = [ "read", "list"]
+}
+EOF
+vault policy write configmergebot /tmp/configMergeBot.hcl
+
+cat <<EOF >/tmp/certmgmtbot.hcl
+path "ucap/issue/*" {
+  capabilities = [ "read", "create", "update", "list", "sudo" ]
+}
+
+path "secret/aws-lambda/certificateManagementBot/*" {
+  capabilities = [ "read", "list"]
+}
+
+path "secret/certificates/*" {
+  capabilities = [ "create", "update" ]
+}
+EOF
+vault policy write certmgmtbot /tmp/certmgmtbot.hcl
+
 ami_id=`curl -s http://169.254.169.254/latest/meta-data/ami-id`
 instance_id=`curl -s http://169.254.169.254/latest/meta-data/instance-id/`
 vpc_id=$(aws --region us-east-1 ec2 describe-instances --filters Name=instance-id,Values=${instance_id} \
@@ -91,4 +120,5 @@ vault write ucap/config/ca pem_bundle=@/tmp/ucap-ca.pem
 rm /tmp/ucap-ca.pem
 
 vault write ucap/config/urls issuing_certificates="${VAULT_ADDR}/v1/ucap/ca"
-vault write ucap/roles/dst-cloud allowed_domains="dst.cloud,dev.dstcorp.io,local.dstcorp.io,cluster.local" allow_subdomains=true ttl=720h max_ttl=2160h key_type=ec key_bits=256 no_store=true
+vault write ucap/roles/dst-cloud allowed_domains="dst.cloud,dev.dstcorp.io,local.dstcorp.io,cluster.local" \
+    allow_subdomains=true ttl=720h max_ttl=2160h key_type=ec key_bits=224 no_store=true
