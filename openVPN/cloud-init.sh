@@ -78,6 +78,15 @@ sudo cp /tmp/dh2048.pem /etc/openvpn/server/dh2048.pem
 # enable ip forwarding on reboot
 echo net.ipv4.conf.ip_forward=1 | sudo tee -a /etc/sysctl.conf
 
+# NAT 10.8.0.0/24 traffic to the remote subnet's
+# (see https://arashmilani.com/post?id=53)
+sudo iptables -A FORWARD -i tun+ -j ACCEPT
+sudo iptables -A INPUT -i tun+ -j ACCEPT
+sudo iptables -A FORWARD -i tun+ -o eth0 -m state --state RELATED,ESTABLISHED -j ACCEPT
+sudo iptables -A FORWARD -i eth0 -o tun+ -m state --state RELATED,ESTABLISHED -j ACCEPT
+sudo iptables -t nat -A POSTROUTING -s 10.8.0.0/24 -o eth0 -j MASQUERADE
+sudo iptables -A OUTPUT -o tun+ -j ACCEPT
+
 # clean up
 sudo apt-get autoremove
 #sudo apt-get clean
