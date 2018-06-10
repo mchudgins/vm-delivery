@@ -196,6 +196,19 @@ cat <<EOF >${FILE}
         {
             "Action": "UPSERT",
             "ResourceRecordSet": {
+                "Name": "*.${HOST_NAME}.",
+                "Type": "A",
+                "TTL": 300,
+                "ResourceRecords": [
+                    {
+                        "Value": ${ipaddr}
+                    }
+                ]
+            }
+        },
+        {
+            "Action": "UPSERT",
+            "ResourceRecordSet": {
                 "Name": "${HOST_NAME}.",
                 "Type": "A",
                 "TTL": 300,
