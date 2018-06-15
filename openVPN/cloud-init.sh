@@ -39,6 +39,20 @@ if [[ -r /etc/default/openvpn ]]; then
     . /etc/default/openvpn
 fi
 
+VPNCIDR=$(curl -s https://config.dst.cloud/${APPNAME}-default.json | jq -r .vpnCIDR)
+
+# NAT 10.8.0.0/24 traffic to the remote subnet's
+# (see https://arashmilani.com/post?id=53)
+iptables -A FORWARD -i tun0 -j ACCEPT
+iptables -A INPUT -i tun0 -j ACCEPT
+iptables -A FORWARD -i tun0 -o eth0 -m state --state RELATED,ESTABLISHED -j ACCEPT
+iptables -A FORWARD -i eth0 -o tun0 -m state --state RELATED,ESTABLISHED -j ACCEPT
+iptables -t nat -A POSTROUTING -s ${VPNCIDR} -o eth0 -j MASQUERADE
+iptables -A OUTPUT -o tun0 -j ACCEPT
+
+# enable IP forwarding
+sysctl net.ipv4.ip_forward=1
+
 # fetch the cert for '*.dstcorp.io'
 curl -s https://config.dst.cloud/${APPNAME}/default/master/certificates/${CERTNAME}.pem >/etc/openvpn/server/cert.pem
 
@@ -74,18 +88,6 @@ sudo systemctl enable openvpn.service
 # generate the Diffie Hellman parameters file.  takes a long time.
 openssl dhparam -out /tmp/dh2048.pem 2048
 sudo cp /tmp/dh2048.pem /etc/openvpn/server/dh2048.pem
-
-# enable ip forwarding on reboot
-echo net.ipv4.conf.ip_forward=1 | sudo tee -a /etc/sysctl.conf
-
-# NAT 10.8.0.0/24 traffic to the remote subnet's
-# (see https://arashmilani.com/post?id=53)
-sudo iptables -A FORWARD -i tun+ -j ACCEPT
-sudo iptables -A INPUT -i tun+ -j ACCEPT
-sudo iptables -A FORWARD -i tun+ -o eth0 -m state --state RELATED,ESTABLISHED -j ACCEPT
-sudo iptables -A FORWARD -i eth0 -o tun+ -m state --state RELATED,ESTABLISHED -j ACCEPT
-sudo iptables -t nat -A POSTROUTING -s 10.8.0.0/24 -o eth0 -j MASQUERADE
-sudo iptables -A OUTPUT -o tun+ -j ACCEPT
 
 # clean up
 sudo apt-get autoremove
